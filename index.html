@@ -278,6 +278,7 @@
       const desc = document.getElementById("description").value;
       const nowStr = new Date().toLocaleString();
 
+      // 1. 공유용 텍스트 및 요약 화면 데이터 구성
       lastSummaryText = `[도로 순찰 적출 보고]\n` +
                         `• 일시: ${nowStr}\n` +
                         `• 보고자: ${reporter || "미기재"}\n` +
@@ -301,6 +302,7 @@
         sumPhoto.style.display = "none";
       }
 
+      // 2. 서버 전송 페이로드 구성
       const payload = {
         reporter: reporter,
         roadName: road,
@@ -312,17 +314,21 @@
         imageBase64: photoBase64
       };
 
+      // 3. 사용자는 대기 없이 0.1초 만에 완료/공유 화면으로 전환
       document.getElementById("pageInput").style.display = "none";
       document.getElementById("pageSuccess").style.display = "block";
       window.scrollTo(0, 0);
 
-      const formData = new URLSearchParams();
-      formData.append("data", JSON.stringify(payload));
-
+      // 4. 구글 Apps Script로 대용량 JSON 스트림 즉시 전송 (OPTIONS 프리플라이트 우회)
       fetch(GAS_API_URL, {
         method: "POST",
-        body: formData
-      }).catch(err => console.log("전송 오류:", err));
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(res => console.log("구글 시트 저장 요청 성공"))
+      .catch(err => console.log("구글 서버 전송 에러:", err));
     }
 
     // 안드로이드 네이티브 공유 패킷 구성
