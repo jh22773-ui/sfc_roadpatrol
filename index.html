@@ -31,7 +31,7 @@
     .submit-btn { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 8px; }
     .submit-btn:disabled { background: #9aa0a6; }
 
-    /* 완료 페이지 스타일 */
+    /* 완료 페이지 */
     .success-header { text-align: center; margin-bottom: 18px; }
     .success-icon { font-size: 40px; margin-bottom: 4px; }
     .btn-unified-share { background: #00c73c; color: white; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0, 199, 60, 0.3); }
@@ -119,7 +119,6 @@
       <p style="margin: 0; font-size: 13px; color: #666;">아래 공유하기를 눌러 밴드나 카톡으로 보고하세요.</p>
     </div>
 
-    <!-- 통합 단일 공유 버튼 -->
     <button type="button" class="btn-unified-share" onclick="executeNativeShare()">
       📤 공유하기 (밴드 / 카카오톡 등)
     </button>
@@ -138,9 +137,15 @@
     <button type="button" class="btn-reset" onclick="goToInputPage()">➕ 새 적출 등록하기</button>
   </div>
 
+  <!-- [대용량 사진 전송 전용] 보이지 않는 숨김 Form 및 iframe -->
+  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+  <form id="hidden_form" method="POST" target="hidden_iframe" style="display:none;">
+    <input type="hidden" name="data" id="hidden_data">
+  </form>
+
   <script>
     // 배포한 Google Apps Script 웹 앱 URL 입력
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
+    const GAS_API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEBAPP_URL";
 
     const ROAD_DIRECTIONS = {
       "올림픽대로": ["공항", "강일"],
@@ -233,8 +238,7 @@
         const img = new Image();
         img.onload = function() {
           const canvas = document.createElement("canvas");
-          // URLSearchParams 버퍼 초과를 원천 차단하기 위해 640px/0.5 화질로 경량화
-          const maxDim = 640;
+          const maxDim = 800; // 화질 및 크기 최적화
           let width = img.width;
           let height = img.height;
 
@@ -251,12 +255,12 @@
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
 
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.5);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
           photoBase64 = dataUrl.split(",")[1];
 
           canvas.toBlob((blob) => {
             compressedPhotoFile = new File([blob], "patrol.jpg", { type: "image/jpeg" });
-          }, "image/jpeg", 0.5);
+          }, "image/jpeg", 0.6);
 
           const preview = document.getElementById("preview");
           preview.src = dataUrl;
@@ -268,7 +272,7 @@
       reader.readAsDataURL(file);
     }
 
-    // 롤백: 검증된 URLSearchParams 폼 전송 방식
+    // 숨김 Form을 활용한 무제한 크기 전송
     function submitData() {
       const road = document.getElementById("roadSelect").value;
       if (!road) return alert("노선명을 선택해 주세요.");
@@ -314,24 +318,18 @@
         imageBase64: photoBase64
       };
 
-      // 완료 화면 즉시 전환
+      // 화면 즉시 완료 페이지로 넘김
       document.getElementById("pageInput").style.display = "none";
       document.getElementById("pageSuccess").style.display = "block";
       window.scrollTo(0, 0);
 
-      // 구글 리디렉션 호환 폼 전송
-      const formData = new URLSearchParams();
-      formData.append("data", JSON.stringify(payload));
-
-      fetch(GAS_API_URL, {
-        method: "POST",
-        body: formData
-      })
-      .then(res => console.log("구글 시트 저장 요청 완료"))
-      .catch(err => console.log("전송 오류:", err));
+      // 브라우저 폼 전송 (사진 용량 제약 및 CORS 차단 원천 우회)
+      const form = document.getElementById("hidden_form");
+      form.action = GAS_API_URL;
+      document.getElementById("hidden_data").value = JSON.stringify(payload);
+      form.submit();
     }
 
-    // 최신 안드로이드 네이티브 공유 호출 (밴드/카톡 선택창)
     async function executeNativeShare() {
       if (!navigator.share) {
         alert("현재 브라우저는 시스템 공유 기능을 지원하지 않습니다.");
@@ -356,7 +354,7 @@
         await navigator.share(shareData);
       } catch (err) {
         if (err.name !== "AbortError") {
-          console.log("공유 실행 오류:", err);
+          console.log("공유 오류:", err);
         }
       }
     }
