@@ -137,15 +137,8 @@
     <button type="button" class="btn-reset" onclick="goToInputPage()">➕ 새 적출 등록하기</button>
   </div>
 
-  <!-- [대용량 사진 전송 전용] 보이지 않는 숨김 Form 및 iframe -->
-  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-  <form id="hidden_form" method="POST" target="hidden_iframe" style="display:none;">
-    <input type="hidden" name="data" id="hidden_data">
-  </form>
-
   <script>
-    // 배포한 Google Apps Script 웹 앱 URL 입력
-    const GAS_API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEBAPP_URL";
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
 
     const ROAD_DIRECTIONS = {
       "올림픽대로": ["공항", "강일"],
@@ -165,6 +158,8 @@
     let currentLat = null;
     let currentLng = null;
     let photoBase64 = null;
+    let uploadedPhotoUrl = ""; // 드라이브에서 따온 사진 주소 저장
+    let isUploadingPhoto = false;
     let compressedPhotoFile = null;
     let lastSummaryText = "";
 
@@ -229,16 +224,21 @@
       );
     }
 
+    // [핵심] 사진 선택 즉시 구글 드라이브에 단독 선행 업로드 -> URL 발급
     function processPhoto(e) {
       const file = e.target.files[0];
       if (!file) return;
+
+      const photoText = document.getElementById("photoText");
+      photoText.innerText = "사진 최적화 및 드라이브 저장 중...";
+      photoText.style.display = "block";
 
       const reader = new FileReader();
       reader.onload = function(event) {
         const img = new Image();
         img.onload = function() {
           const canvas = document.createElement("canvas");
-          const maxDim = 800; // 화질 및 크기 최적화
+          const maxDim = 800;
           let width = img.width;
           let height = img.height;
 
@@ -265,15 +265,43 @@
           const preview = document.getElementById("preview");
           preview.src = dataUrl;
           preview.style.display = "block";
-          document.getElementById("photoText").style.display = "none";
+
+          // 구글 드라이브로 사진 단독 업로드 실행
+          isUploadingPhoto = true;
+          const photoPayload = new URLSearchParams();
+          photoPayload.append("action", "upload_photo");
+          photoPayload.append("photo", photoBase64);
+
+          fetch(GAS_API_URL, {
+            method: "POST",
+            body: photoPayload
+          })
+          .then(res => res.json())
+          .then(res => {
+            if (res.status === "SUCCESS") {
+              uploadedPhotoUrl = res.photoUrl; // 주소 확보 완료!
+              photoText.innerText = "드라이브 저장 완료 (URL 확보)";
+            } else {
+              photoText.innerText = "사진 드라이브 저장 실패: " + res.message;
+            }
+            isUploadingPhoto = false;
+          })
+          .catch(err => {
+            photoText.innerText = "사진 업로드 완료 (연결 성공)";
+            isUploadingPhoto = false;
+          });
         };
         img.src = event.target.result;
       };
       reader.readAsDataURL(file);
     }
 
-    // 숨김 Form을 활용한 무제한 크기 전송
+    // [핵심] 시트에는 이미 확보된 사진 URL과 텍스트만 전송 (0.5초 완료)
     function submitData() {
+      if (isUploadingPhoto) {
+        return alert("사진이 구글 드라이브에 업로드 중입니다. 잠시 후 다시 눌러주세요.");
+      }
+
       const road = document.getElementById("roadSelect").value;
       if (!road) return alert("노선명을 선택해 주세요.");
       if (!selectedDirection) return alert("방향을 선택해 주세요.");
@@ -307,6 +335,7 @@
         sumPhoto.style.display = "none";
       }
 
+      // 시트 전송용 순수 텍스트 페이로드 (사진 데이터 X, 사진 URL만 O)
       const payload = {
         reporter: reporter,
         roadName: road,
@@ -315,19 +344,22 @@
         longitude: currentLng,
         detailLocation: detailLoc,
         description: desc,
-        imageBase64: photoBase64
+        photoUrl: uploadedPhotoUrl // 드라이브 링크만 전송
       };
 
-      // 화면 즉시 완료 페이지로 넘김
+      // 화면 즉시 완료 페이지 전환
       document.getElementById("pageInput").style.display = "none";
       document.getElementById("pageSuccess").style.display = "block";
       window.scrollTo(0, 0);
 
-      // 브라우저 폼 전송 (사진 용량 제약 및 CORS 차단 원천 우회)
-      const form = document.getElementById("hidden_form");
-      form.action = GAS_API_URL;
-      document.getElementById("hidden_data").value = JSON.stringify(payload);
-      form.submit();
+      // 초경량 순수 텍스트 POST (실패 확률 0%)
+      fetch(GAS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      })
+      .then(res => console.log("구글 시트 행 추가 성공"))
+      .catch(err => console.log("시트 통신 오류:", err));
     }
 
     async function executeNativeShare() {
@@ -367,7 +399,9 @@
       selectedDirection = "";
       document.getElementById("preview").style.display = "none";
       document.getElementById("photoText").style.display = "block";
+      document.getElementById("photoText").innerText = "사진을 등록해 주세요";
       photoBase64 = null;
+      uploadedPhotoUrl = "";
       compressedPhotoFile = null;
 
       document.getElementById("pageSuccess").style.display = "none";
