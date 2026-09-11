@@ -31,6 +31,7 @@
     .submit-btn { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 8px; }
     .submit-btn:disabled { background: #9aa0a6; }
 
+    /* 완료 및 공유 페이지 전용 스타일 */
     .success-header { text-align: center; margin-bottom: 20px; }
     .success-icon { font-size: 44px; margin-bottom: 6px; }
     .share-btn-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
@@ -140,8 +141,8 @@
   </div>
 
   <script>
-    // 1단계에서 복사한 Apps Script 웹 앱 URL을 여기에 넣으세요
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
+    // 배포한 Google Apps Script 웹 앱 URL 입력
+    const GAS_API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEBAPP_URL";
 
     const ROAD_DIRECTIONS = {
       "올림픽대로": ["공항", "강일"],
@@ -201,7 +202,6 @@
       });
     }
 
-    // 네이티브 웹 환경에서는 완벽하게 동작하는 Geolocation API
     function getGPS() {
       const gpsText = document.getElementById("gpsText");
       gpsText.innerText = "측위 중...";
@@ -216,7 +216,11 @@
           gpsText.innerText = `${currentLat}, ${currentLng} (오차 ${Math.round(pos.coords.accuracy)}m)`;
         },
         (err) => {
-          gpsText.innerText = "위치 획득 실패 (GPS 켜짐 및 권한 확인)";
+          let msg = "위치 획득 실패";
+          if (err.code === 1) msg = "GPS 권한 거부됨";
+          else if (err.code === 2) msg = "위치 수신 불가";
+          else if (err.code === 3) msg = "측위 시간 초과";
+          gpsText.innerText = msg;
         },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
@@ -231,7 +235,7 @@
         const img = new Image();
         img.onload = function() {
           const canvas = document.createElement("canvas");
-          const maxDim = 800; // 가볍고 빠른 전송을 위해 800px로 최적화
+          const maxDim = 800; // 빠른 전송을 위해 리사이즈 최적화
           let width = img.width;
           let height = img.height;
 
@@ -310,18 +314,21 @@
         imageBase64: photoBase64
       };
 
-      // 즉각 완료 화면으로 전환
+      // 화면은 즉시 완료 페이지로 넘김
       document.getElementById("pageInput").style.display = "none";
       document.getElementById("pageSuccess").style.display = "block";
       window.scrollTo(0, 0);
 
-      // 구글 백엔드로 초고속 비동기 POST (지연 없음)
+      // 구글 Apps Script 리디렉션 호환 폼 전송 방식
+      const formData = new URLSearchParams();
+      formData.append("data", JSON.stringify(payload));
+
       fetch(GAS_API_URL, {
         method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(payload)
-      }).catch(err => console.log("전송 에러:", err));
+        body: formData
+      })
+      .then(res => console.log("서버 전송 요청 완료"))
+      .catch(err => console.log("전송 오류:", err));
     }
 
     async function shareToBand() {
