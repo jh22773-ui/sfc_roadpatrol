@@ -119,12 +119,11 @@
       <p style="margin: 0; font-size: 13px; color: #666;">아래 공유하기를 눌러 밴드나 카톡으로 보고하세요.</p>
     </div>
 
-    <!-- 통합 공유 버튼 -->
+    <!-- 통합 단일 공유 버튼 -->
     <button type="button" class="btn-unified-share" onclick="executeNativeShare()">
       📤 공유하기 (밴드 / 카카오톡 등)
     </button>
 
-    <!-- 등록 내용 요약 -->
     <div class="summary-card">
       <div style="font-weight: bold; margin-bottom: 8px; color: #1a73e8; border-bottom: 1px solid #ddd; padding-bottom: 4px;">📋 등록 내용 요약</div>
       <div><b>일시:</b> <span id="sumTime"></span></div>
@@ -140,6 +139,7 @@
   </div>
 
   <script>
+    // 배포한 Google Apps Script 웹 앱 URL 입력
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
 
     const ROAD_DIRECTIONS = {
@@ -233,7 +233,8 @@
         const img = new Image();
         img.onload = function() {
           const canvas = document.createElement("canvas");
-          const maxDim = 800;
+          // URLSearchParams 버퍼 초과를 원천 차단하기 위해 640px/0.5 화질로 경량화
+          const maxDim = 640;
           let width = img.width;
           let height = img.height;
 
@@ -250,12 +251,12 @@
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
 
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.5);
           photoBase64 = dataUrl.split(",")[1];
 
           canvas.toBlob((blob) => {
             compressedPhotoFile = new File([blob], "patrol.jpg", { type: "image/jpeg" });
-          }, "image/jpeg", 0.6);
+          }, "image/jpeg", 0.5);
 
           const preview = document.getElementById("preview");
           preview.src = dataUrl;
@@ -267,6 +268,7 @@
       reader.readAsDataURL(file);
     }
 
+    // 롤백: 검증된 URLSearchParams 폼 전송 방식
     function submitData() {
       const road = document.getElementById("roadSelect").value;
       if (!road) return alert("노선명을 선택해 주세요.");
@@ -278,7 +280,6 @@
       const desc = document.getElementById("description").value;
       const nowStr = new Date().toLocaleString();
 
-      // 1. 공유용 텍스트 및 요약 화면 데이터 구성
       lastSummaryText = `[도로 순찰 적출 보고]\n` +
                         `• 일시: ${nowStr}\n` +
                         `• 보고자: ${reporter || "미기재"}\n` +
@@ -302,7 +303,6 @@
         sumPhoto.style.display = "none";
       }
 
-      // 2. 서버 전송 페이로드 구성
       const payload = {
         reporter: reporter,
         roadName: road,
@@ -314,33 +314,31 @@
         imageBase64: photoBase64
       };
 
-      // 3. 사용자는 대기 없이 0.1초 만에 완료/공유 화면으로 전환
+      // 완료 화면 즉시 전환
       document.getElementById("pageInput").style.display = "none";
       document.getElementById("pageSuccess").style.display = "block";
       window.scrollTo(0, 0);
 
-      // 4. 구글 Apps Script로 대용량 JSON 스트림 즉시 전송 (OPTIONS 프리플라이트 우회)
+      // 구글 리디렉션 호환 폼 전송
+      const formData = new URLSearchParams();
+      formData.append("data", JSON.stringify(payload));
+
       fetch(GAS_API_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8"
-        },
-        body: JSON.stringify(payload)
+        body: formData
       })
-      .then(res => console.log("구글 시트 저장 요청 성공"))
-      .catch(err => console.log("구글 서버 전송 에러:", err));
+      .then(res => console.log("구글 시트 저장 요청 완료"))
+      .catch(err => console.log("전송 오류:", err));
     }
 
-    // 안드로이드 네이티브 공유 패킷 구성
+    // 최신 안드로이드 네이티브 공유 호출 (밴드/카톡 선택창)
     async function executeNativeShare() {
       if (!navigator.share) {
-        alert("현재 브라우저에서는 시스템 공유 기능을 지원하지 않습니다.");
+        alert("현재 브라우저는 시스템 공유 기능을 지원하지 않습니다.");
         return;
       }
 
       let shareData = {};
-
-      // 사진과 텍스트를 함께 전송 가능한지 검증
       if (compressedPhotoFile && navigator.canShare && navigator.canShare({ files: [compressedPhotoFile] })) {
         shareData = {
           title: "도로 순찰 적출 보고",
@@ -348,7 +346,6 @@
           files: [compressedPhotoFile]
         };
       } else {
-        // 사진 파일 공유 미지원 환경에서는 텍스트만 전송
         shareData = {
           title: "도로 순찰 적출 보고",
           text: lastSummaryText
@@ -358,7 +355,6 @@
       try {
         await navigator.share(shareData);
       } catch (err) {
-        // 사용자가 공유 창을 그냥 닫은(취소) 경우는 무시
         if (err.name !== "AbortError") {
           console.log("공유 실행 오류:", err);
         }
