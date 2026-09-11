@@ -31,7 +31,7 @@
     .submit-btn { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 8px; }
     .submit-btn:disabled { background: #9aa0a6; }
 
-    /* 완료 페이지 */
+    /* 완료 페이지 스타일 */
     .success-header { text-align: center; margin-bottom: 18px; }
     .success-icon { font-size: 40px; margin-bottom: 4px; }
     .btn-unified-share { background: #00c73c; color: white; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0, 199, 60, 0.3); }
@@ -119,6 +119,7 @@
       <p style="margin: 0; font-size: 13px; color: #666;">아래 공유하기를 눌러 밴드나 카톡으로 보고하세요.</p>
     </div>
 
+    <!-- 단일 네이티브 공유 버튼 -->
     <button type="button" class="btn-unified-share" onclick="executeNativeShare()">
       📤 공유하기 (밴드 / 카카오톡 등)
     </button>
@@ -136,6 +137,19 @@
 
     <button type="button" class="btn-reset" onclick="goToInputPage()">➕ 새 적출 등록하기</button>
   </div>
+
+  <!-- [CORS 제약 및 대용량 사진 전송을 우회하는 보이지 않는 폼 & iframe] -->
+  <iframe name="gas_target_frame" id="gas_target_frame" style="display: none;"></iframe>
+  <form id="gas_post_form" method="POST" target="gas_target_frame" style="display: none;">
+    <input type="hidden" name="reporter" id="f_reporter">
+    <input type="hidden" name="roadName" id="f_roadName">
+    <input type="hidden" name="direction" id="f_direction">
+    <input type="hidden" name="latitude" id="f_latitude">
+    <input type="hidden" name="longitude" id="f_longitude">
+    <input type="hidden" name="detailLocation" id="f_detailLocation">
+    <input type="hidden" name="description" id="f_description">
+    <input type="hidden" name="photoFile" id="f_photoFile">
+  </form>
 
   <script>
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
@@ -157,9 +171,7 @@
     let selectedDirection = "";
     let currentLat = null;
     let currentLng = null;
-    let photoBase64 = null;
-    let uploadedPhotoUrl = ""; // 드라이브에서 따온 사진 주소 저장
-    let isUploadingPhoto = false;
+    let photoBase64 = "";
     let compressedPhotoFile = null;
     let lastSummaryText = "";
 
@@ -224,14 +236,9 @@
       );
     }
 
-    // [핵심] 사진 선택 즉시 구글 드라이브에 단독 선행 업로드 -> URL 발급
     function processPhoto(e) {
       const file = e.target.files[0];
       if (!file) return;
-
-      const photoText = document.getElementById("photoText");
-      photoText.innerText = "사진 최적화 및 드라이브 저장 중...";
-      photoText.style.display = "block";
 
       const reader = new FileReader();
       reader.onload = function(event) {
@@ -265,43 +272,14 @@
           const preview = document.getElementById("preview");
           preview.src = dataUrl;
           preview.style.display = "block";
-
-          // 구글 드라이브로 사진 단독 업로드 실행
-          isUploadingPhoto = true;
-          const photoPayload = new URLSearchParams();
-          photoPayload.append("action", "upload_photo");
-          photoPayload.append("photo", photoBase64);
-
-          fetch(GAS_API_URL, {
-            method: "POST",
-            body: photoPayload
-          })
-          .then(res => res.json())
-          .then(res => {
-            if (res.status === "SUCCESS") {
-              uploadedPhotoUrl = res.photoUrl; // 주소 확보 완료!
-              photoText.innerText = "드라이브 저장 완료 (URL 확보)";
-            } else {
-              photoText.innerText = "사진 드라이브 저장 실패: " + res.message;
-            }
-            isUploadingPhoto = false;
-          })
-          .catch(err => {
-            photoText.innerText = "사진 업로드 완료 (연결 성공)";
-            isUploadingPhoto = false;
-          });
+          document.getElementById("photoText").style.display = "none";
         };
         img.src = event.target.result;
       };
       reader.readAsDataURL(file);
     }
 
-    // [핵심] 시트에는 이미 확보된 사진 URL과 텍스트만 전송 (0.5초 완료)
     function submitData() {
-      if (isUploadingPhoto) {
-        return alert("사진이 구글 드라이브에 업로드 중입니다. 잠시 후 다시 눌러주세요.");
-      }
-
       const road = document.getElementById("roadSelect").value;
       if (!road) return alert("노선명을 선택해 주세요.");
       if (!selectedDirection) return alert("방향을 선택해 주세요.");
@@ -335,31 +313,25 @@
         sumPhoto.style.display = "none";
       }
 
-      // 시트 전송용 순수 텍스트 페이로드 (사진 데이터 X, 사진 URL만 O)
-      const payload = {
-        reporter: reporter,
-        roadName: road,
-        direction: selectedDirection,
-        latitude: currentLat,
-        longitude: currentLng,
-        detailLocation: detailLoc,
-        description: desc,
-        photoUrl: uploadedPhotoUrl // 드라이브 링크만 전송
-      };
+      // 숨김 폼에 데이터 주입
+      document.getElementById("f_reporter").value = reporter;
+      document.getElementById("f_roadName").value = road;
+      document.getElementById("f_direction").value = selectedDirection;
+      document.getElementById("f_latitude").value = currentLat;
+      document.getElementById("f_longitude").value = currentLng;
+      document.getElementById("f_detailLocation").value = detailLoc;
+      document.getElementById("f_description").value = desc;
+      document.getElementById("f_photoFile").value = photoBase64;
 
-      // 화면 즉시 완료 페이지 전환
+      // 지체 없이 즉각 완료/공유 화면 전환
       document.getElementById("pageInput").style.display = "none";
       document.getElementById("pageSuccess").style.display = "block";
       window.scrollTo(0, 0);
 
-      // 초경량 순수 텍스트 POST (실패 확률 0%)
-      fetch(GAS_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      })
-      .then(res => console.log("구글 시트 행 추가 성공"))
-      .catch(err => console.log("시트 통신 오류:", err));
+      // 브라우저 폼 전송 실행 (CORS 및 대용량 제약 완전 우회)
+      const form = document.getElementById("gas_post_form");
+      form.action = GAS_API_URL;
+      form.submit();
     }
 
     async function executeNativeShare() {
@@ -386,7 +358,7 @@
         await navigator.share(shareData);
       } catch (err) {
         if (err.name !== "AbortError") {
-          console.log("공유 오류:", err);
+          console.log("공유 취소 또는 오류:", err);
         }
       }
     }
@@ -399,9 +371,7 @@
       selectedDirection = "";
       document.getElementById("preview").style.display = "none";
       document.getElementById("photoText").style.display = "block";
-      document.getElementById("photoText").innerText = "사진을 등록해 주세요";
-      photoBase64 = null;
-      uploadedPhotoUrl = "";
+      photoBase64 = "";
       compressedPhotoFile = null;
 
       document.getElementById("pageSuccess").style.display = "none";
