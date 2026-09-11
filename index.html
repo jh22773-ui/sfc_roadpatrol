@@ -2,241 +2,189 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>도로 순찰 적출</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { margin: 0; padding: 14px; background: #f4f6f8; color: #222; }
-    .card { background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-    h2 { margin: 0 0 14px 0; font-size: 18px; color: #1a73e8; }
-    .form-group { margin-bottom: 14px; }
-    label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 5px; color: #444; }
-    input[type="text"], select, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; background: #fff; }
-    textarea { resize: vertical; height: 60px; }
+    body { margin: 0; padding: 14px; background-color: #f4f6f8; color: #202124; }
+    .card { background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 14px; }
+    h2 { margin: 0 0 14px 0; font-size: 1.2rem; text-align: center; color: #1a73e8; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 5px; color: #3c4043; }
+    input[type="text"], select, textarea { width: 100%; padding: 10px; border: 1px solid #dadce0; border-radius: 8px; font-size: 0.95rem; background: #fff; }
+    textarea { height: 70px; resize: none; }
     
-    .gps-box { display: flex; justify-content: space-between; align-items: center; background: #eef3fc; padding: 10px; border-radius: 6px; font-size: 13px; }
-    .gps-btn { background: #1a73e8; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .gps-box { display: flex; align-items: center; justify-content: space-between; background: #e8f0fe; padding: 8px 12px; border-radius: 8px; font-size: 0.82rem; }
+    .gps-text { color: #1967d2; font-weight: 600; }
+    .btn-gps { background: #fff; border: 1px solid #1a73e8; color: #1a73e8; padding: 4px 8px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; }
     
     .dir-container { display: flex; gap: 8px; margin-top: 6px; }
-    .dir-btn { flex: 1; padding: 10px; border: 1px solid #ccc; background: #f8f9fa; border-radius: 6px; font-size: 14px; cursor: pointer; }
-    .dir-btn.active { background: #1a73e8; color: #fff; border-color: #1a73e8; font-weight: bold; }
-    
-    .photo-area { text-align: center; border: 2px dashed #bbb; border-radius: 8px; padding: 12px; background: #fafafa; }
-    #preview { max-width: 100%; max-height: 180px; border-radius: 6px; display: none; margin-top: 8px; }
-    .photo-btn-group { display: flex; gap: 8px; margin-top: 8px; }
-    .photo-btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 13px; font-weight: bold; color: white; cursor: pointer; }
-    .btn-camera { background: #1a73e8; }
-    .btn-album { background: #5f6368; }
+    .btn-dir { flex: 1; padding: 12px; font-size: 1rem; font-weight: bold; border: 1px solid #dadce0; border-radius: 8px; background: #f8f9fa; color: #5f6368; cursor: pointer; text-align: center; transition: 0.15s; }
+    .btn-dir.active { background: #1a73e8; color: #fff; border-color: #1a73e8; box-shadow: 0 2px 4px rgba(26,115,232,0.3); }
 
-    .submit-btn { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 8px; }
-    .submit-btn:disabled { background: #9aa0a6; }
-
-    .success-header { text-align: center; margin-bottom: 18px; }
-    .success-icon { font-size: 40px; margin-bottom: 4px; }
-    .btn-unified-share { background: #00c73c; color: white; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0, 199, 60, 0.3); }
+    .camera-btn { display: block; width: 100%; text-align: center; background: #0f9d58; color: white; padding: 11px; border-radius: 8px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
+    #cameraInput { display: none; }
+    #preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 8px; display: none; }
     
-    .summary-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px; font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
-    .summary-card b { color: #333; }
-    .summary-img { width: 100%; max-height: 160px; object-fit: cover; border-radius: 6px; margin-top: 10px; }
-    .btn-reset { background: #5f6368; color: white; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; width: 100%; }
+    .submit-btn { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; margin-top: 6px; }
+    .submit-btn:disabled { background: #bdc1c6; }
+    #loading { display: none; text-align: center; font-weight: bold; color: #d93025; margin-top: 10px; font-size: 0.9rem; }
   </style>
 </head>
 <body>
 
-  <!-- [화면 1] 적출 입력 화면 -->
-  <div id="pageInput" class="card">
-    <h2>도로 순찰 적출 등록</h2>
+<div class="card">
+  <h2>도로 순찰 적출 등록</h2>
 
-    <div class="form-group">
-      <label>보고자 성명</label>
-      <input type="text" id="reporterName" placeholder="성명 입력 (자동 기억)" oninput="saveReporter()">
-    </div>
-
-    <div class="form-group">
-      <label>GPS 위치</label>
-      <div class="gps-box">
-        <span id="gpsText">위치 수신 중...</span>
-        <button type="button" class="gps-btn" onclick="getGPS()">재측위</button>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>노선명</label>
-      <select id="roadSelect" onchange="onRoadChange()">
-        <option value="">-- 노선을 선택하세요 --</option>
-        <option value="올림픽대로">올림픽대로</option>
-        <option value="동부간선도로">동부간선도로</option>
-        <option value="강변북로">강변북로</option>
-        <option value="내부순환도로">내부순환도로</option>
-        <option value="고속국도1호">고속국도1호</option>
-        <option value="북부간선도로">북부간선도로</option>
-        <option value="국회대로">국회대로</option>
-        <option value="언주로">언주로</option>
-        <option value="서부간선도로">서부간선도로</option>
-        <option value="강남순환로">강남순환로</option>
-        <option value="우면산로">우면산로</option>
-      </select>
-    </div>
-
-    <div class="form-group" id="directionGroup" style="display: none;">
-      <label>방향 선택</label>
-      <div class="dir-container" id="dirButtonContainer"></div>
-    </div>
-
-    <div class="form-group">
-      <label>현장 사진</label>
-      <div class="photo-area">
-        <span id="photoText">사진을 등록해 주세요</span>
-        <img id="preview" alt="미리보기">
-      </div>
-      <div class="photo-btn-group">
-        <button type="button" class="photo-btn btn-camera" onclick="document.getElementById('cameraInput').click()">📷 즉시 촬영</button>
-        <button type="button" class="photo-btn btn-album" onclick="document.getElementById('albumInput').click()">🖼️ 앨범 선택</button>
-      </div>
-      <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="processPhoto(event)">
-      <input type="file" id="albumInput" accept="image/*" style="display: none;" onchange="processPhoto(event)">
-    </div>
-
-    <div class="form-group">
-      <label>상세 위치 (지점, 차로 등)</label>
-      <input type="text" id="detailLocation" placeholder="예: 2차로 포트홀, 램프 합류부">
-    </div>
-
-    <div class="form-group">
-      <label>상태 설명 및 조치사항</label>
-      <textarea id="description" placeholder="예: 직경 30cm 포트홀, 긴급 보수 요망"></textarea>
-    </div>
-
-    <button id="submitBtn" class="submit-btn" onclick="submitData()">구글 시트 등록</button>
+  <div class="form-group">
+    <label for="reporter">보고자</label>
+    <input type="text" id="reporter" placeholder="이름 입력" onchange="saveReporter(this.value)">
   </div>
 
-  <!-- [화면 2] 완료 및 공유 화면 -->
-  <div id="pageSuccess" class="card" style="display: none;">
-    <div class="success-header">
-      <div class="success-icon">✅</div>
-      <h2 style="color: #2e7d32; margin-bottom: 4px;">구글 시트 저장 완료</h2>
-      <p style="margin: 0; font-size: 13px; color: #666;">아래 공유하기를 눌러 밴드나 카톡으로 보고하세요.</p>
-    </div>
-
-    <button type="button" class="btn-unified-share" onclick="executeNativeShare()">
-      📤 공유하기 (밴드 / 카카오톡 등)
-    </button>
-
-    <div class="summary-card">
-      <div style="font-weight: bold; margin-bottom: 8px; color: #1a73e8; border-bottom: 1px solid #ddd; padding-bottom: 4px;">📋 등록 내용 요약</div>
-      <div><b>일시:</b> <span id="sumTime"></span></div>
-      <div><b>보고자:</b> <span id="sumReporter"></span></div>
-      <div><b>노선/방향:</b> <span id="sumRoad"></span></div>
-      <div><b>상세위치:</b> <span id="sumLocation"></span></div>
-      <div><b>GPS 좌표:</b> <span id="sumGps"></span></div>
-      <div><b>상태설명:</b> <span id="sumDesc"></span></div>
-      <img id="sumPhoto" class="summary-img" alt="등록된 사진" style="display: none;">
-    </div>
-
-    <button type="button" class="btn-reset" onclick="goToInputPage()">➕ 새 적출 등록하기</button>
+  <div class="form-group">
+    <label for="roadSelect">노선명</label>
+    <select id="roadSelect" onchange="onRoadChange()">
+      <option value="">-- 노선을 선택하세요 --</option>
+      <option value="올림픽대로">올림픽대로</option>
+      <option value="동부간선도로">동부간선도로</option>
+      <option value="강변북로">강변북로</option>
+      <option value="내부순환도로">내부순환도로</option>
+      <option value="고속국도1호">고속국도1호</option>
+      <option value="북부간선도로">북부간선도로</option>
+      <option value="국회대로">국회대로</option>
+      <option value="언주로">언주로</option>
+      <option value="서부간선도로">서부간선도로</option>
+      <option value="강남순환로">강남순환로</option>
+      <option value="우면산로">우면산로</option>
+    </select>
   </div>
 
-  <!-- [CORS 및 대용량 버퍼 에러를 원천 우회하는 단일 페이로드 폼] -->
-  <iframe name="gas_target_frame" id="gas_target_frame" style="display: none;"></iframe>
-  <form id="gas_post_form" method="POST" target="gas_target_frame" style="display: none;">
-    <input type="hidden" name="payload" id="hidden_payload">
-  </form>
+  <div class="form-group" id="dirGroup" style="display: none;">
+    <label>진행 방향</label>
+    <div class="dir-container" id="dirContainer"></div>
+  </div>
 
-  <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
+  <div class="form-group">
+    <label for="detailLocation">상세위치</label>
+    <input type="text" id="detailLocation" placeholder="예: 3차로 포트홀, OO램프 인근">
+  </div>
 
-    const ROAD_DIRECTIONS = {
-      "올림픽대로": ["공항", "강일"],
-      "동부간선도로": ["의정부", "성수"],
-      "강변북로": ["난지", "구리"],
-      "내부순환도로": ["성산", "성수"],
-      "고속국도1호": ["서울", "부산"],
-      "북부간선도로": ["월곡", "신내"],
-      "국회대로": ["목동", "인천"],
-      "언주로": ["포이", "내곡"],
-      "서부간선도로": ["성산", "시흥"],
-      "강남순환로": ["광명", "수서"],
-      "우면산로": ["반포", "과천"]
-    };
+  <div class="form-group">
+    <label>GPS 위치</label>
+    <div class="gps-box">
+      <span id="gpsStatus" class="gps-text">위치 잡는 중...</span>
+      <button type="button" class="btn-gps" onclick="getLocation()">재수신</button>
+    </div>
+  </div>
 
-    let selectedDirection = "";
-    let currentLat = null;
-    let currentLng = null;
-    let photoBase64 = "";
-    let compressedPhotoFile = null;
-    let lastSummaryText = "";
+  <div class="form-group">
+    <label for="description">상태설명</label>
+    <textarea id="description" placeholder="손상 상태, 도로 시설물 이상 내용 입력"></textarea>
+  </div>
 
-    window.onload = function() {
-      getGPS();
-      const savedName = localStorage.getItem("savedReporter");
-      if (savedName) document.getElementById("reporterName").value = savedName;
-    };
+  <div class="form-group">
+    <label>현장 사진</label>
+    <label for="cameraInput" class="camera-btn">📷 사진 촬영</label>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="processImage(this)">
+    <img id="preview" alt="미리보기">
+  </div>
 
-    function saveReporter() {
-      localStorage.setItem("savedReporter", document.getElementById("reporterName").value);
+  <button type="button" class="submit-btn" id="submitBtn" onclick="submitData()">등록하기</button>
+  <div id="loading">데이터 전송 중입니다. 잠시만 기다려주세요...</div>
+</div>
+
+<script>
+  // 배포된 Apps Script 엔드포인트 URL
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
+
+  const ROAD_DIRECTIONS = {
+    "올림픽대로": ["공항", "강일"],
+    "동부간선도로": ["의정부", "성수"],
+    "강변북로": ["난지", "구리"],
+    "내부순환도로": ["성산", "성수"],
+    "고속국도1호": ["서울", "부산"],
+    "북부간선도로": ["월곡", "신내"],
+    "국회대로": ["목동", "인천"],
+    "언주로": ["포이", "내곡"],
+    "서부간선도로": ["성산", "시흥"],
+    "강남순환로": ["광명", "수서"],
+    "우면산로": ["반포", "과천"]
+  };
+
+  let selectedDirection = "";
+  let currentLat = null;
+  let currentLng = null;
+  let compressedBase64 = null;
+
+  window.onload = function() {
+    const savedName = localStorage.getItem('reporterName');
+    if (savedName) document.getElementById('reporter').value = savedName;
+    getLocation();
+  };
+
+  function saveReporter(name) {
+    localStorage.setItem('reporterName', name);
+  }
+
+  function onRoadChange() {
+    const road = document.getElementById('roadSelect').value;
+    const dirGroup = document.getElementById('dirGroup');
+    const container = document.getElementById('dirContainer');
+    
+    selectedDirection = "";
+    container.innerHTML = "";
+
+    if (!road || !ROAD_DIRECTIONS[road]) {
+      dirGroup.style.display = "none";
+      return;
     }
 
-    function onRoadChange() {
-      const road = document.getElementById("roadSelect").value;
-      const dirGroup = document.getElementById("directionGroup");
-      const container = document.getElementById("dirButtonContainer");
-      container.innerHTML = "";
-      selectedDirection = "";
+    ROAD_DIRECTIONS[road].forEach(dir => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-dir';
+      btn.innerText = `${dir} 방향`;
+      btn.onclick = function() {
+        document.querySelectorAll('.btn-dir').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedDirection = dir;
+      };
+      container.appendChild(btn);
+    });
 
-      if (!road || !ROAD_DIRECTIONS[road]) {
-        dirGroup.style.display = "none";
-        return;
-      }
+    dirGroup.style.display = "block";
+  }
 
-      dirGroup.style.display = "block";
-      ROAD_DIRECTIONS[road].forEach(dir => {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "dir-btn";
-        btn.innerText = dir + " 방향";
-        btn.onclick = function() {
-          document.querySelectorAll(".dir-btn").forEach(b => b.classList.remove("active"));
-          btn.classList.add("active");
-          selectedDirection = dir;
-        };
-        container.appendChild(btn);
-      });
+  function getLocation() {
+    const statusText = document.getElementById('gpsStatus');
+    statusText.innerText = "위치 갱신 중...";
+    if (!navigator.geolocation) {
+      statusText.innerText = "GPS 미지원";
+      return;
     }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        currentLat = pos.coords.latitude.toFixed(6);
+        currentLng = pos.coords.longitude.toFixed(6);
+        statusText.innerText = `수신완료 (${currentLat}, ${currentLng})`;
+      },
+      (err) => {
+        statusText.innerText = "GPS 수신 실패 (권한 허용 확인)";
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
 
-    function getGPS() {
-      const gpsText = document.getElementById("gpsText");
-      gpsText.innerText = "측위 중...";
-      if (!navigator.geolocation) {
-        gpsText.innerText = "GPS 미지원 브라우저";
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          currentLat = pos.coords.latitude.toFixed(6);
-          currentLng = pos.coords.longitude.toFixed(6);
-          gpsText.innerText = `${currentLat}, ${currentLng} (오차 ${Math.round(pos.coords.accuracy)}m)`;
-        },
-        (err) => {
-          let msg = "위치 획득 실패";
-          if (err.code === 1) msg = "GPS 권한 거부됨";
-          else if (err.code === 2) msg = "위치 수신 불가";
-          else if (err.code === 3) msg = "측위 시간 초과";
-          gpsText.innerText = msg;
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    }
-
-    function processPhoto(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
+  function processImage(input) {
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
       const reader = new FileReader();
-      reader.onload = function(event) {
+
+      reader.onload = function(e) {
         const img = new Image();
         img.onload = function() {
-          const canvas = document.createElement("canvas");
-          const maxDim = 800; // 가볍고 빠른 처리를 위한 800px 최적화
+          const canvas = document.createElement('canvas');
+          const maxDim = 1200;
           let width = img.width;
           let height = img.height;
 
@@ -250,130 +198,84 @@
 
           canvas.width = width;
           canvas.height = height;
-          const ctx = canvas.getContext("2d");
+          const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
 
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
-          photoBase64 = dataUrl.split(",")[1];
+          compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
 
-          canvas.toBlob((blob) => {
-            compressedPhotoFile = new File([blob], "patrol.jpg", { type: "image/jpeg" });
-          }, "image/jpeg", 0.6);
-
-          const preview = document.getElementById("preview");
-          preview.src = dataUrl;
-          preview.style.display = "block";
-          document.getElementById("photoText").style.display = "none";
+          const preview = document.getElementById('preview');
+          preview.src = compressedBase64;
+          preview.style.display = 'block';
         };
-        img.src = event.target.result;
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
+  }
 
-    function submitData() {
-      const road = document.getElementById("roadSelect").value;
-      if (!road) return alert("노선명을 선택해 주세요.");
-      if (!selectedDirection) return alert("방향을 선택해 주세요.");
-      if (!currentLat || !currentLng) return alert("GPS 위치가 아직 잡히지 않았습니다.");
+  // fetch API를 통한 비동기 전송
+  async function submitData() {
+    const reporter = document.getElementById('reporter').value.trim();
+    const road = document.getElementById('roadSelect').value;
+    const detail = document.getElementById('detailLocation').value.trim();
+    const desc = document.getElementById('description').value.trim();
+    const submitBtn = document.getElementById('submitBtn');
+    const loading = document.getElementById('loading');
 
-      const reporter = document.getElementById("reporterName").value;
-      const detailLoc = document.getElementById("detailLocation").value;
-      const desc = document.getElementById("description").value;
-      const nowStr = new Date().toLocaleString();
+    if (!road) {
+      alert("노선명을 선택해주세요.");
+      return;
+    }
+    if (!selectedDirection) {
+      alert("방향을 선택해주세요.");
+      return;
+    }
 
-      lastSummaryText = `[도로 순찰 적출 보고]\n` +
-                        `• 일시: ${nowStr}\n` +
-                        `• 보고자: ${reporter || "미기재"}\n` +
-                        `• 노선: ${road} (${selectedDirection} 방향)\n` +
-                        `• 위치: ${detailLoc || "미기재"}\n` +
-                        `• 좌표: ${currentLat}, ${currentLng}\n` +
-                        `• 내용: ${desc || "특이사항 없음"}`;
+    submitBtn.disabled = true;
+    loading.style.display = 'block';
 
-      document.getElementById("sumTime").innerText = nowStr;
-      document.getElementById("sumReporter").innerText = reporter || "미기재";
-      document.getElementById("sumRoad").innerText = `${road} (${selectedDirection} 방향)`;
-      document.getElementById("sumLocation").innerText = detailLoc || "-";
-      document.getElementById("sumGps").innerText = `${currentLat}, ${currentLng}`;
-      document.getElementById("sumDesc").innerText = desc || "-";
+    const payload = {
+      reporter: reporter,
+      roadName: road,
+      direction: selectedDirection,
+      detailLocation: detail,
+      latitude: currentLat,
+      longitude: currentLng,
+      description: desc,
+      imageBase64: compressedBase64
+    };
 
-      const sumPhoto = document.getElementById("sumPhoto");
-      if (photoBase64) {
-        sumPhoto.src = "data:image/jpeg;base64," + photoBase64;
-        sumPhoto.style.display = "block";
+    try {
+      // CORS Preflight(OPTIONS) 방지를 위해 text/plain 스트림으로 전송
+      const response = await fetch(SCRIPT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (result.status === "success") {
+        alert("적출 내역이 성공적으로 등록되었습니다.");
+        document.getElementById('detailLocation').value = '';
+        document.getElementById('description').value = '';
+        document.getElementById('preview').style.display = 'none';
+        document.getElementById('cameraInput').value = '';
+        document.querySelectorAll('.btn-dir').forEach(b => b.classList.remove('active'));
+        selectedDirection = "";
+        compressedBase64 = null;
+        getLocation();
       } else {
-        sumPhoto.style.display = "none";
+        alert("서버 오류: " + result.message);
       }
-
-      // 전체 데이터를 단일 JSON 객체로 패키징
-      const payloadData = {
-        reporter: reporter,
-        roadName: road,
-        direction: selectedDirection,
-        latitude: currentLat,
-        longitude: currentLng,
-        detailLocation: detailLoc,
-        description: desc,
-        photoFile: photoBase64
-      };
-
-      // 즉시 완료 화면 전환
-      document.getElementById("pageInput").style.display = "none";
-      document.getElementById("pageSuccess").style.display = "block";
-      window.scrollTo(0, 0);
-
-      // 폼의 단일 input에 JSON 문자열을 주입하고 제출
-      const form = document.getElementById("gas_post_form");
-      form.action = GAS_API_URL;
-      document.getElementById("hidden_payload").value = JSON.stringify(payloadData);
-      form.submit();
+    } catch (err) {
+      alert("전송 중 네트워크 오류가 발생했습니다: " + err.message);
+    } finally {
+      submitBtn.disabled = false;
+      loading.style.display = 'none';
     }
+  }
+</script>
 
-    async function executeNativeShare() {
-      if (!navigator.share) {
-        alert("현재 브라우저는 시스템 공유 기능을 지원하지 않습니다.");
-        return;
-      }
-
-      let shareData = {};
-      if (compressedPhotoFile && navigator.canShare && navigator.canShare({ files: [compressedPhotoFile] })) {
-        shareData = {
-          title: "도로 순찰 적출 보고",
-          text: lastSummaryText,
-          files: [compressedPhotoFile]
-        };
-      } else {
-        shareData = {
-          title: "도로 순찰 적출 보고",
-          text: lastSummaryText
-        };
-      }
-
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        if (err.name !== "AbortError") {
-          console.log("공유 취소 또는 오류:", err);
-        }
-      }
-    }
-
-    function goToInputPage() {
-      document.getElementById("detailLocation").value = "";
-      document.getElementById("description").value = "";
-      document.getElementById("roadSelect").value = "";
-      document.getElementById("directionGroup").style.display = "none";
-      selectedDirection = "";
-      document.getElementById("preview").style.display = "none";
-      document.getElementById("photoText").style.display = "block";
-      photoBase64 = "";
-      compressedPhotoFile = null;
-
-      document.getElementById("pageSuccess").style.display = "none";
-      document.getElementById("pageInput").style.display = "block";
-      window.scrollTo(0, 0);
-
-      getGPS();
-    }
-  </script>
 </body>
 </html>
