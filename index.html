@@ -297,7 +297,7 @@
         // [카카오맵 링크]
         let kakaoMapUrl = "";
         if (currentLat && currentLng) {
-          kakaoMapUrl = `https://map.kakao.com/link/map/${encodeURIComponent(road + " " + detail)},${currentLat},${currentLng}`;
+          kakaoMapUrl = `https://map.kakao.com/link/map/적출위치,${currentLat},${currentLng}`;
         }
 
         lastReportText = `${road} ${selectedDirection}방향 ${detail}\n${desc}`;
