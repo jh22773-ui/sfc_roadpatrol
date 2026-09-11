@@ -31,14 +31,12 @@
     .submit-btn { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 8px; }
     .submit-btn:disabled { background: #9aa0a6; }
 
-    /* 완료 및 공유 페이지 전용 스타일 */
-    .success-header { text-align: center; margin-bottom: 20px; }
-    .success-icon { font-size: 44px; margin-bottom: 6px; }
-    .share-btn-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-    .btn-band { background: #00c73c; color: white; padding: 14px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; width: 100%; }
-    .btn-kakao { background: #fee500; color: #191919; padding: 14px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; width: 100%; }
+    /* 완료 페이지 스타일 */
+    .success-header { text-align: center; margin-bottom: 18px; }
+    .success-icon { font-size: 40px; margin-bottom: 4px; }
+    .btn-unified-share { background: #00c73c; color: white; padding: 15px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0, 199, 60, 0.3); }
     
-    .summary-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px; font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+    .summary-card { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px; font-size: 13px; line-height: 1.6; margin-bottom: 16px; }
     .summary-card b { color: #333; }
     .summary-img { width: 100%; max-height: 160px; object-fit: cover; border-radius: 6px; margin-top: 10px; }
     .btn-reset { background: #5f6368; color: white; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; width: 100%; }
@@ -118,14 +116,15 @@
     <div class="success-header">
       <div class="success-icon">✅</div>
       <h2 style="color: #2e7d32; margin-bottom: 4px;">구글 시트 저장 완료</h2>
-      <p style="margin: 0; font-size: 13px; color: #666;">아래 버튼을 눌러 현장 상황을 공유하세요.</p>
+      <p style="margin: 0; font-size: 13px; color: #666;">아래 공유하기를 눌러 밴드나 카톡으로 보고하세요.</p>
     </div>
 
-    <div class="share-btn-group">
-      <button type="button" class="btn-band" onclick="shareToBand()">📢 밴드로 공유하기</button>
-      <button type="button" class="btn-kakao" onclick="shareToKakao()">💬 카카오톡으로 공유하기</button>
-    </div>
+    <!-- 통합 공유 버튼 -->
+    <button type="button" class="btn-unified-share" onclick="executeNativeShare()">
+      📤 공유하기 (밴드 / 카카오톡 등)
+    </button>
 
+    <!-- 등록 내용 요약 -->
     <div class="summary-card">
       <div style="font-weight: bold; margin-bottom: 8px; color: #1a73e8; border-bottom: 1px solid #ddd; padding-bottom: 4px;">📋 등록 내용 요약</div>
       <div><b>일시:</b> <span id="sumTime"></span></div>
@@ -141,7 +140,6 @@
   </div>
 
   <script>
-    // 배포한 Google Apps Script 웹 앱 URL 입력
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
 
     const ROAD_DIRECTIONS = {
@@ -235,7 +233,7 @@
         const img = new Image();
         img.onload = function() {
           const canvas = document.createElement("canvas");
-          const maxDim = 800; // 빠른 전송을 위해 리사이즈 최적화
+          const maxDim = 800;
           let width = img.width;
           let height = img.height;
 
@@ -314,68 +312,50 @@
         imageBase64: photoBase64
       };
 
-      // 화면은 즉시 완료 페이지로 넘김
       document.getElementById("pageInput").style.display = "none";
       document.getElementById("pageSuccess").style.display = "block";
       window.scrollTo(0, 0);
 
-      // 구글 Apps Script 리디렉션 호환 폼 전송 방식
       const formData = new URLSearchParams();
       formData.append("data", JSON.stringify(payload));
 
       fetch(GAS_API_URL, {
         method: "POST",
         body: formData
-      })
-      .then(res => console.log("서버 전송 요청 완료"))
-      .catch(err => console.log("전송 오류:", err));
+      }).catch(err => console.log("전송 오류:", err));
     }
 
-    async function shareToBand() {
-      if (navigator.share) {
-        const shareData = { title: "도로 순찰 적출 보고", text: lastSummaryText };
-        if (compressedPhotoFile && navigator.canShare && navigator.canShare({ files: [compressedPhotoFile] })) {
-          shareData.files = [compressedPhotoFile];
-        }
-        try {
-          await navigator.share(shareData);
-          return;
-        } catch (e) {
-          console.log("취소 또는 대체 실행");
-        }
+    // 안드로이드 네이티브 공유 패킷 구성
+    async function executeNativeShare() {
+      if (!navigator.share) {
+        alert("현재 브라우저에서는 시스템 공유 기능을 지원하지 않습니다.");
+        return;
       }
-      copyToClipboard(lastSummaryText);
-      alert("내용이 복사되었습니다.\n밴드가 열리면 붙여넣기하세요.");
-      location.href = `bandapp://create/post?text=${encodeURIComponent(lastSummaryText)}`;
-    }
 
-    async function shareToKakao() {
-      if (navigator.share) {
-        const shareData = { title: "도로 순찰 적출 보고", text: lastSummaryText };
-        if (compressedPhotoFile && navigator.canShare && navigator.canShare({ files: [compressedPhotoFile] })) {
-          shareData.files = [compressedPhotoFile];
-        }
-        try {
-          await navigator.share(shareData);
-          return;
-        } catch (e) {
-          console.log("취소");
-        }
-      }
-      copyToClipboard(lastSummaryText);
-      alert("보고 내용이 복사되었습니다.\n대화방에 붙여넣기하세요.");
-    }
+      let shareData = {};
 
-    function copyToClipboard(text) {
-      if (navigator.clipboard) {
-        navigator.clipboard.writeText(text);
+      // 사진과 텍스트를 함께 전송 가능한지 검증
+      if (compressedPhotoFile && navigator.canShare && navigator.canShare({ files: [compressedPhotoFile] })) {
+        shareData = {
+          title: "도로 순찰 적출 보고",
+          text: lastSummaryText,
+          files: [compressedPhotoFile]
+        };
       } else {
-        const temp = document.createElement("textarea");
-        temp.value = text;
-        document.body.appendChild(temp);
-        temp.select();
-        document.execCommand("copy");
-        document.body.removeChild(temp);
+        // 사진 파일 공유 미지원 환경에서는 텍스트만 전송
+        shareData = {
+          title: "도로 순찰 적출 보고",
+          text: lastSummaryText
+        };
+      }
+
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // 사용자가 공유 창을 그냥 닫은(취소) 경우는 무시
+        if (err.name !== "AbortError") {
+          console.log("공유 실행 오류:", err);
+        }
       }
     }
 
