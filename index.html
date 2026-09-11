@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>도로 순찰 적출</title>
+  <title>도로 순찰 적출 입력</title>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { margin: 0; padding: 14px; background-color: #f4f6f8; color: #202124; }
@@ -14,26 +14,38 @@
     input[type="text"], select, textarea { width: 100%; padding: 10px; border: 1px solid #dadce0; border-radius: 8px; font-size: 0.95rem; background: #fff; }
     textarea { height: 70px; resize: none; }
     
+    /* GPS 박스 */
     .gps-box { display: flex; align-items: center; justify-content: space-between; background: #e8f0fe; padding: 8px 12px; border-radius: 8px; font-size: 0.82rem; }
     .gps-text { color: #1967d2; font-weight: 600; }
     .btn-gps { background: #fff; border: 1px solid #1a73e8; color: #1a73e8; padding: 4px 8px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; }
     
+    /* 방향 2버튼 */
     .dir-container { display: flex; gap: 8px; margin-top: 6px; }
     .btn-dir { flex: 1; padding: 12px; font-size: 1rem; font-weight: bold; border: 1px solid #dadce0; border-radius: 8px; background: #f8f9fa; color: #5f6368; cursor: pointer; text-align: center; transition: 0.15s; }
     .btn-dir.active { background: #1a73e8; color: #fff; border-color: #1a73e8; box-shadow: 0 2px 4px rgba(26,115,232,0.3); }
 
+    /* 카메라 */
     .camera-btn { display: block; width: 100%; text-align: center; background: #0f9d58; color: white; padding: 11px; border-radius: 8px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
     #cameraInput { display: none; }
     #preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 8px; display: none; }
     
-    .submit-btn { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; margin-top: 6px; }
-    .submit-btn:disabled { background: #bdc1c6; }
+    /* 버튼 공통 */
+    .btn-main { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; }
+    .btn-main:disabled { background: #bdc1c6; }
+    .btn-share { width: 100%; background: #ea4335; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 14px; box-shadow: 0 2px 4px rgba(234,67,53,0.3); }
+    .btn-sub { width: 100%; background: #f1f3f4; color: #3c4043; border: 1px solid #dadce0; padding: 12px; border-radius: 8px; font-size: 0.95rem; font-weight: bold; cursor: pointer; margin-top: 14px; }
+    
     #loading { display: none; text-align: center; font-weight: bold; color: #d93025; margin-top: 10px; font-size: 0.9rem; }
+
+    /* 완료 화면 요약 카드 */
+    .summary-box { background: #f8f9fa; border: 1px solid #dadce0; border-radius: 8px; padding: 14px; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-bottom: 12px; }
+    .summary-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin-top: 8px; }
   </style>
 </head>
 <body>
 
-<div class="card">
+<!-- 1. 입력 화면 (Input View) -->
+<div class="card" id="inputView">
   <h2>도로 순찰 적출 등록</h2>
 
   <div class="form-group">
@@ -89,12 +101,26 @@
     <img id="preview" alt="미리보기">
   </div>
 
-  <button type="button" class="submit-btn" id="submitBtn" onclick="submitData()">등록하기</button>
+  <button type="button" class="btn-main" id="submitBtn" onclick="submitData()">등록하기</button>
   <div id="loading">데이터 전송 중입니다. 잠시만 기다려주세요...</div>
 </div>
 
+<!-- 2. 완료 및 공유 화면 (Result View) -->
+<div class="card" id="resultView" style="display: none;">
+  <h2>적출 등록 완료</h2>
+
+  <!-- 상단 공유 버튼 -->
+  <button type="button" class="btn-share" onclick="shareReport()">📢 밴드 / 카카오톡 공유</button>
+
+  <label>보고 내용 요약</label>
+  <div class="summary-box" id="summaryText"></div>
+  <img id="summaryPreview" class="summary-img" alt="등록된 사진" style="display: none;">
+
+  <!-- 신규 입력 복귀 버튼 -->
+  <button type="button" class="btn-sub" onclick="resetToInput()">➕ 신규 입력 (원래 페이지로)</button>
+</div>
+
 <script>
-  // 배포된 Apps Script 엔드포인트 URL
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
 
   const ROAD_DIRECTIONS = {
@@ -115,6 +141,10 @@
   let currentLat = null;
   let currentLng = null;
   let compressedBase64 = null;
+  let imageBlob = null; // 공유를 위한 Blob 객체
+
+  // 공유용 텍스트 캐시
+  let lastReportText = "";
 
   window.onload = function() {
     const savedName = localStorage.getItem('reporterName');
@@ -203,6 +233,11 @@
 
           compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
 
+          // Web Share API 전송용 Blob 추출
+          canvas.toBlob(function(blob) {
+            imageBlob = blob;
+          }, 'image/jpeg', 0.75);
+
           const preview = document.getElementById('preview');
           preview.src = compressedBase64;
           preview.style.display = 'block';
@@ -213,7 +248,7 @@
     }
   }
 
-  // fetch API를 통한 비동기 전송
+  // 데이터 전송 및 완료 화면 전환
   async function submitData() {
     const reporter = document.getElementById('reporter').value.trim();
     const road = document.getElementById('roadSelect').value;
@@ -246,7 +281,6 @@
     };
 
     try {
-      // CORS Preflight(OPTIONS) 방지를 위해 text/plain 스트림으로 전송
       const response = await fetch(SCRIPT_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -256,24 +290,94 @@
       const result = await response.json();
 
       if (result.status === "success") {
-        alert("적출 내역이 성공적으로 등록되었습니다.");
-        document.getElementById('detailLocation').value = '';
-        document.getElementById('description').value = '';
-        document.getElementById('preview').style.display = 'none';
-        document.getElementById('cameraInput').value = '';
-        document.querySelectorAll('.btn-dir').forEach(b => b.classList.remove('active'));
-        selectedDirection = "";
-        compressedBase64 = null;
-        getLocation();
+        // 공유 텍스트 작성
+        // 형식:
+        // [노선명 방향 상세위치]
+        // [상태설명]
+        // [카카오맵 링크]
+        let kakaoMapUrl = "";
+        if (currentLat && currentLng) {
+          kakaoMapUrl = `https://map.kakao.com/link/map/${encodeURIComponent(road + " " + detail)},${currentLat},${currentLng}`;
+        }
+
+        lastReportText = `${road} ${selectedDirection}방향 ${detail}\n${desc}`;
+        if (kakaoMapUrl) {
+          lastReportText += `\n\n위치확인(카카오맵):\n${kakaoMapUrl}`;
+        }
+
+        // 결과 화면 표시 세팅
+        document.getElementById('summaryText').innerText = lastReportText;
+        const sumImg = document.getElementById('summaryPreview');
+        if (compressedBase64) {
+          sumImg.src = compressedBase64;
+          sumImg.style.display = 'block';
+        } else {
+          sumImg.style.display = 'none';
+        }
+
+        // 화면 전환: 입력 화면 숨기고 결과 화면 오픈
+        document.getElementById('inputView').style.display = 'none';
+        document.getElementById('resultView').style.display = 'block';
+        window.scrollTo(0, 0);
+
       } else {
         alert("서버 오류: " + result.message);
       }
     } catch (err) {
-      alert("전송 중 네트워크 오류가 발생했습니다: " + err.message);
+      alert("전송 중 네트워크 오류: " + err.message);
     } finally {
       submitBtn.disabled = false;
       loading.style.display = 'none';
     }
+  }
+
+  // 시스템 네이티브 공유창 호출 (카카오톡, 밴드 등으로 전송)
+  async function shareReport() {
+    if (!navigator.share) {
+      alert("이 브라우저는 시스템 공유 기능을 지원하지 않습니다. 텍스트를 복사해 사용해주세요.");
+      return;
+    }
+
+    const shareData = {
+      text: lastReportText
+    };
+
+    // 사진 파일 객체가 있으면 파일도 함께 포함
+    if (imageBlob) {
+      const file = new File([imageBlob], "patrol_photo.jpg", { type: "image/jpeg" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        shareData.files = [file];
+      }
+    }
+
+    try {
+      await navigator.share(shareData);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        alert("공유 실패: " + err.message);
+      }
+    }
+  }
+
+  // 신규 입력으로 돌아가기
+  function resetToInput() {
+    // 폼 초기화 (보고자와 노선명은 편의상 유지)
+    document.getElementById('detailLocation').value = '';
+    document.getElementById('description').value = '';
+    document.getElementById('preview').style.display = 'none';
+    document.getElementById('cameraInput').value = '';
+    document.querySelectorAll('.btn-dir').forEach(b => b.classList.remove('active'));
+    selectedDirection = "";
+    compressedBase64 = null;
+    imageBlob = null;
+    lastReportText = "";
+
+    // 화면 전환
+    document.getElementById('resultView').style.display = 'none';
+    document.getElementById('inputView').style.display = 'block';
+    window.scrollTo(0, 0);
+
+    getLocation(); // 위치 재수신
   }
 </script>
 
