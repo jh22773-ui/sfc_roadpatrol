@@ -17,7 +17,9 @@
     /* GPS 박스 */
     .gps-box { display: flex; align-items: center; justify-content: space-between; background: #e8f0fe; padding: 8px 12px; border-radius: 8px; font-size: 0.82rem; }
     .gps-text { color: #1967d2; font-weight: 600; }
-    .btn-gps { background: #fff; border: 1px solid #1a73e8; color: #1a73e8; padding: 4px 8px; border-radius: 6px; font-size: 0.78rem; cursor: pointer; }
+    .gps-actions { display: flex; gap: 6px; margin-left: 10px; flex-shrink: 0; }
+    .btn-gps { background: #fff; border: 1px solid #1a73e8; color: #1a73e8; padding: 6px 8px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .btn-gps.manual { background: #1a73e8; color: #fff; }
     
     /* 방향 2버튼 */
     .dir-container { display: flex; gap: 8px; margin-top: 6px; }
@@ -107,7 +109,10 @@
     <label>GPS 위치</label>
     <div class="gps-box">
       <span id="gpsStatus" class="gps-text">위치 잡는 중...</span>
-      <button type="button" class="btn-gps" onclick="getLocation()">재수신</button>
+      <div class="gps-actions">
+        <button type="button" class="btn-gps" onclick="getLocation()">재수신</button>
+        <button type="button" class="btn-gps manual" onclick="openMapPicker()">위치 수동선택</button>
+      </div>
     </div>
     <div class="location-source" id="locationSource">현재 기기 위치를 확인 중입니다.</div>
   </div>
@@ -139,11 +144,11 @@
   </div>
 </div>
 
-<!-- EXIF GPS가 없을 때 수동 위치 선택 -->
+<!-- 수동 위치 선택 -->
 <div class="map-modal" id="mapModal">
   <div class="map-panel">
     <div class="map-title">지도에서 위치 선택</div>
-    <div class="map-help" id="mapHelp">사진에 GPS 정보가 없습니다. 현장 위치를 지도에서 눌러 핀을 지정해주세요.</div>
+    <div class="map-help" id="mapHelp">지도를 누르거나 핀을 드래그해 현장 위치를 지정해주세요.</div>
     <div id="map"></div>
     <button type="button" class="btn-current" onclick="moveMapToCurrentLocation()">📍 현재 기기 위치로 이동</button>
     <div id="mapCoordText">지도에서 위치를 선택해주세요.</div>
@@ -169,13 +174,12 @@
   <button type="button" class="btn-sub" onclick="resetToInput()">➕ 신규 입력 (원래 페이지로)</button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
 <script>
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
 
   // Kakao Developers에서 발급한 JavaScript 키를 입력하세요.
   // 운영 시에는 반드시 실제 서비스 도메인만 허용하도록 플랫폼(Web) 도메인을 등록하세요.
-  const KAKAO_MAP_APP_KEY = "5cdafd778090db58369a5ff63f278a1a";
+  const KAKAO_MAP_APP_KEY = "YOUR_KAKAO_JAVASCRIPT_KEY";
 
   const ROAD_DIRECTIONS = {
     "올림픽대로": ["공항", "강일"],
@@ -197,7 +201,6 @@
   let compressedBase64 = null;
   let imageBlob = null; // 공유를 위한 Blob 객체
   let locationSource = "device";
-  let requiresMapSelection = false;
 
   let kakaoSdkPromise = null;
   let kakaoMap = null;
@@ -264,13 +267,13 @@
 
     if (!navigator.geolocation) {
       statusText.innerText = "GPS 미지원";
-      sourceText.innerText = "사진 EXIF 또는 지도에서 위치를 지정해주세요.";
+      sourceText.innerText = "위치 수동선택을 눌러 지도에서 현장 위치를 지정해주세요.";
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        // 페이지 진입 시 시작된 GPS 요청이 사진 EXIF/지도 선택을 뒤늦게 덮어쓰지 않도록 한다.
+        // 페이지 진입 직후 시작된 위치 요청이 사용자의 수동 선택을 뒤늦게 덮어쓰지 않도록 한다.
         if (!force && locationSource !== "device") return;
 
         setLocation(
@@ -280,9 +283,13 @@
           `현재 기기 GPS · 정확도 약 ${Math.round(pos.coords.accuracy)}m`
         );
       },
-      () => {
+      (err) => {
         statusText.innerText = "GPS 수신 실패";
-        sourceText.innerText = "사진 EXIF 또는 지도에서 위치를 지정해주세요.";
+        if (err && err.code === 1) {
+          sourceText.innerText = "위치 권한이 허용되지 않았습니다. 권한을 허용한 뒤 재수신하거나 위치 수동선택을 사용해주세요.";
+        } else {
+          sourceText.innerText = "현재 위치를 가져오지 못했습니다. 재수신하거나 위치 수동선택을 사용해주세요.";
+        }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -307,40 +314,31 @@
 
   function chooseGallery() {
     closePhotoSourceSheet();
-    document.getElementById('galleryInput').click();
+    const input = document.getElementById('galleryInput');
+    input.value = '';
+    input.click();
   }
 
-  async function processImage(input) {
+  function isImageFile(file) {
+    if (!file) return false;
+    if (file.type && file.type.startsWith('image/')) return true;
+    return /\.(jpe?g|png|heic|heif|webp)$/i.test(file.name || '');
+  }
+
+  function processImage(input) {
     if (!input.files || !input.files[0]) return;
 
     const file = input.files[0];
     closePhotoSourceSheet();
 
-    // 1) 캔버스 압축 전에 원본 File에서 EXIF GPS를 먼저 읽는다.
-    let hasExifGps = false;
-    try {
-      if (window.exifr) {
-        const gps = await exifr.gps(file);
-        if (gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)) {
-          setLocation(gps.latitude, gps.longitude, "exif", "사진 EXIF GPS에서 위치를 가져왔습니다.");
-          requiresMapSelection = false;
-          hasExifGps = true;
-        }
-      }
-    } catch (err) {
-      console.warn('EXIF GPS 읽기 실패:', err);
+    if (!isImageFile(file)) {
+      alert('사진 파일만 선택할 수 있습니다.');
+      input.value = '';
+      return;
     }
 
-    if (!hasExifGps) {
-      locationSource = "awaiting-map";
-      requiresMapSelection = true;
-      document.getElementById('gpsStatus').innerText = "사진 GPS 정보 없음";
-      document.getElementById('locationSource').innerText = "지도에서 현장 위치를 지정해주세요.";
-      // 지도 API 로딩은 이미지 압축과 별개로 진행한다.
-      openMapPicker("사진에 GPS(EXIF) 정보가 없어 지도에서 위치를 선택해주세요.");
-    }
-
-    // 2) 이후 기존 방식대로 이미지 압축 및 미리보기 생성
+    // 사진은 업로드/미리보기용으로만 처리한다.
+    // 위치 정보는 사진에서 읽지 않고 기기 GPS 또는 지도 수동선택만 사용한다.
     const reader = new FileReader();
     reader.onload = function(e) {
       const img = new Image();
@@ -416,7 +414,7 @@
     const help = document.getElementById('mapHelp');
     const coordText = document.getElementById('mapCoordText');
 
-    help.innerText = message || "지도에서 현장 위치를 눌러 핀을 지정해주세요.";
+    help.innerText = message || "지도를 누르거나 핀을 드래그해 현장 위치를 지정해주세요.";
     coordText.innerText = "지도를 불러오는 중...";
     modal.style.display = 'flex';
 
@@ -448,7 +446,8 @@
     });
 
     kakaoMarker = new kakao.maps.Marker({
-      position: center
+      position: center,
+      draggable: true
     });
 
     if (currentLat && currentLng) {
@@ -459,7 +458,7 @@
     } else {
       pendingMapLat = null;
       pendingMapLng = null;
-      document.getElementById('mapCoordText').innerText = "지도에서 위치를 눌러주세요.";
+      document.getElementById('mapCoordText').innerText = "지도를 누르거나 핀을 드래그해 위치를 지정해주세요.";
     }
 
     kakao.maps.event.addListener(kakaoMap, 'click', function(mouseEvent) {
@@ -468,6 +467,13 @@
       pendingMapLng = latlng.getLng();
       kakaoMarker.setPosition(latlng);
       kakaoMarker.setMap(kakaoMap);
+      updateMapCoordText();
+    });
+
+    kakao.maps.event.addListener(kakaoMarker, 'dragend', function() {
+      const latlng = kakaoMarker.getPosition();
+      pendingMapLat = latlng.getLat();
+      pendingMapLng = latlng.getLng();
       updateMapCoordText();
     });
 
@@ -516,7 +522,6 @@
     }
 
     setLocation(pendingMapLat, pendingMapLng, "map", "지도에서 직접 지정한 위치입니다.");
-    requiresMapSelection = false;
     closeMapPicker();
   }
 
@@ -542,9 +547,8 @@
       return;
     }
 
-    if (requiresMapSelection) {
-      alert("사진에 GPS 정보가 없어 지도에서 위치를 지정해야 합니다.");
-      openMapPicker("사진에 GPS(EXIF) 정보가 없습니다. 등록 전에 지도에서 현장 위치를 지정해주세요.");
+    if (!currentLat || !currentLng) {
+      alert("GPS 위치가 지정되지 않았습니다. 재수신하거나 위치 수동선택을 사용해주세요.");
       return;
     }
 
@@ -655,7 +659,6 @@
     imageBlob = null;
     lastReportText = "";
     locationSource = "device";
-    requiresMapSelection = false;
     pendingMapLat = null;
     pendingMapLng = null;
 
