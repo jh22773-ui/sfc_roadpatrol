@@ -24,10 +24,32 @@
     .btn-dir { flex: 1; padding: 12px; font-size: 1rem; font-weight: bold; border: 1px solid #dadce0; border-radius: 8px; background: #f8f9fa; color: #5f6368; cursor: pointer; text-align: center; transition: 0.15s; }
     .btn-dir.active { background: #1a73e8; color: #fff; border-color: #1a73e8; box-shadow: 0 2px 4px rgba(26,115,232,0.3); }
 
-    /* 카메라 */
-    .camera-btn { display: block; width: 100%; text-align: center; background: #0f9d58; color: white; padding: 11px; border-radius: 8px; font-weight: bold; font-size: 0.95rem; cursor: pointer; }
-    #cameraInput { display: none; }
+    /* 사진 선택 / 미리보기 */
+    .camera-btn { display: block; width: 100%; text-align: center; background: #0f9d58; color: white; padding: 11px; border-radius: 8px; font-weight: bold; font-size: 0.95rem; cursor: pointer; border: 0; }
+    #cameraInput, #galleryInput { display: none; }
     #preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 8px; display: none; }
+    .location-source { margin-top: 6px; color: #5f6368; font-size: 0.76rem; }
+
+    /* 사진 촬영/앨범 선택 바텀시트 */
+    .sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.38); display: none; align-items: flex-end; justify-content: center; z-index: 1000; padding: 12px; }
+    .sheet { width: 100%; max-width: 520px; background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.22); }
+    .sheet-title { font-weight: 700; text-align: center; margin: 4px 0 12px; }
+    .sheet-btn { width: 100%; border: 1px solid #dadce0; background: #fff; border-radius: 10px; padding: 14px; font-size: 1rem; font-weight: 700; cursor: pointer; margin-top: 8px; }
+    .sheet-btn.primary { background: #0f9d58; color: #fff; border-color: #0f9d58; }
+    .sheet-btn.secondary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+
+    /* 지도 선택 모달 */
+    .map-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1100; padding: 12px; }
+    .map-panel { width: 100%; max-width: 620px; max-height: 92vh; overflow: auto; background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); }
+    .map-title { margin: 0 0 6px; font-size: 1.05rem; font-weight: 800; }
+    .map-help { color: #5f6368; font-size: 0.84rem; line-height: 1.45; margin-bottom: 10px; }
+    #map { width: 100%; height: 52vh; min-height: 320px; border-radius: 10px; background: #eef1f4; overflow: hidden; }
+    #mapCoordText { margin-top: 8px; font-size: 0.82rem; color: #1967d2; font-weight: 700; min-height: 20px; }
+    .map-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .map-actions button { flex: 1; border: 0; padding: 12px 8px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    .btn-current { width: 100%; margin-top: 8px; border: 1px solid #1a73e8; color: #1a73e8; background: #fff; padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+    .btn-map-confirm { background: #1a73e8; color: #fff; }
+    .btn-map-cancel { background: #f1f3f4; color: #3c4043; }
     
     /* 버튼 공통 */
     .btn-main { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; }
@@ -87,6 +109,7 @@
       <span id="gpsStatus" class="gps-text">위치 잡는 중...</span>
       <button type="button" class="btn-gps" onclick="getLocation()">재수신</button>
     </div>
+    <div class="location-source" id="locationSource">현재 기기 위치를 확인 중입니다.</div>
   </div>
 
   <div class="form-group">
@@ -96,13 +119,39 @@
 
   <div class="form-group">
     <label>현장 사진</label>
-    <label for="cameraInput" class="camera-btn">📷 사진 촬영</label>
+    <button type="button" class="camera-btn" onclick="openPhotoSourceSheet()">📷 사진 추가</button>
     <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="processImage(this)">
+    <input type="file" id="galleryInput" accept="image/*" onchange="processImage(this)">
     <img id="preview" alt="미리보기">
   </div>
 
   <button type="button" class="btn-main" id="submitBtn" onclick="submitData()">등록하기</button>
   <div id="loading">데이터 전송 중입니다. 잠시만 기다려주세요...</div>
+</div>
+
+<!-- 사진 소스 선택 -->
+<div class="sheet-backdrop" id="photoSourceSheet" onclick="handleSheetBackdrop(event)">
+  <div class="sheet">
+    <div class="sheet-title">사진을 어떻게 추가할까요?</div>
+    <button type="button" class="sheet-btn primary" onclick="chooseCamera()">📷 사진 촬영</button>
+    <button type="button" class="sheet-btn secondary" onclick="chooseGallery()">🖼️ 앨범에서 선택</button>
+    <button type="button" class="sheet-btn" onclick="closePhotoSourceSheet()">취소</button>
+  </div>
+</div>
+
+<!-- EXIF GPS가 없을 때 수동 위치 선택 -->
+<div class="map-modal" id="mapModal">
+  <div class="map-panel">
+    <div class="map-title">지도에서 위치 선택</div>
+    <div class="map-help" id="mapHelp">사진에 GPS 정보가 없습니다. 현장 위치를 지도에서 눌러 핀을 지정해주세요.</div>
+    <div id="map"></div>
+    <button type="button" class="btn-current" onclick="moveMapToCurrentLocation()">📍 현재 기기 위치로 이동</button>
+    <div id="mapCoordText">지도에서 위치를 선택해주세요.</div>
+    <div class="map-actions">
+      <button type="button" class="btn-map-cancel" onclick="closeMapPicker()">닫기</button>
+      <button type="button" class="btn-map-confirm" onclick="confirmMapLocation()">이 위치 사용</button>
+    </div>
+  </div>
 </div>
 
 <!-- 2. 완료 및 공유 화면 (Result View) -->
@@ -120,8 +169,13 @@
   <button type="button" class="btn-sub" onclick="resetToInput()">➕ 신규 입력 (원래 페이지로)</button>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
 <script>
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbywk5Nkz6v_smihkOEMeM39atjJXBJzkG8Afz5m9VaiXBmBQ184ixio3Pv_sDFOJmcm/exec";
+
+  // Kakao Developers에서 발급한 JavaScript 키를 입력하세요.
+  // 운영 시에는 반드시 실제 서비스 도메인만 허용하도록 플랫폼(Web) 도메인을 등록하세요.
+  const KAKAO_MAP_APP_KEY = "5cdafd778090db58369a5ff63f278a1a";
 
   const ROAD_DIRECTIONS = {
     "올림픽대로": ["공항", "강일"],
@@ -142,6 +196,14 @@
   let currentLng = null;
   let compressedBase64 = null;
   let imageBlob = null; // 공유를 위한 Blob 객체
+  let locationSource = "device";
+  let requiresMapSelection = false;
+
+  let kakaoSdkPromise = null;
+  let kakaoMap = null;
+  let kakaoMarker = null;
+  let pendingMapLat = null;
+  let pendingMapLng = null;
 
   // 공유용 텍스트 캐시
   let lastReportText = "";
@@ -149,7 +211,7 @@
   window.onload = function() {
     const savedName = localStorage.getItem('reporterName');
     if (savedName) document.getElementById('reporter').value = savedName;
-    getLocation();
+    getLocation(false);
   };
 
   function saveReporter(name) {
@@ -185,67 +247,281 @@
     dirGroup.style.display = "block";
   }
 
-  function getLocation() {
+  function setLocation(lat, lng, source, label) {
+    currentLat = Number(lat).toFixed(6);
+    currentLng = Number(lng).toFixed(6);
+    locationSource = source;
+
+    document.getElementById('gpsStatus').innerText = `수신완료 (${currentLat}, ${currentLng})`;
+    document.getElementById('locationSource').innerText = label;
+  }
+
+  function getLocation(force = true) {
     const statusText = document.getElementById('gpsStatus');
+    const sourceText = document.getElementById('locationSource');
     statusText.innerText = "위치 갱신 중...";
+    sourceText.innerText = "현재 기기 GPS를 확인 중입니다.";
+
     if (!navigator.geolocation) {
       statusText.innerText = "GPS 미지원";
+      sourceText.innerText = "사진 EXIF 또는 지도에서 위치를 지정해주세요.";
       return;
     }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        currentLat = pos.coords.latitude.toFixed(6);
-        currentLng = pos.coords.longitude.toFixed(6);
-        statusText.innerText = `수신완료 (${currentLat}, ${currentLng})`;
+        // 페이지 진입 시 시작된 GPS 요청이 사진 EXIF/지도 선택을 뒤늦게 덮어쓰지 않도록 한다.
+        if (!force && locationSource !== "device") return;
+
+        setLocation(
+          pos.coords.latitude,
+          pos.coords.longitude,
+          "device",
+          `현재 기기 GPS · 정확도 약 ${Math.round(pos.coords.accuracy)}m`
+        );
       },
-      (err) => {
-        statusText.innerText = "GPS 수신 실패 (권한 허용 확인)";
+      () => {
+        statusText.innerText = "GPS 수신 실패";
+        sourceText.innerText = "사진 EXIF 또는 지도에서 위치를 지정해주세요.";
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }
 
-  function processImage(input) {
-    if (input.files && input.files[0]) {
-      const file = input.files[0];
-      const reader = new FileReader();
+  function openPhotoSourceSheet() {
+    document.getElementById('photoSourceSheet').style.display = 'flex';
+  }
 
-      reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-          const canvas = document.createElement('canvas');
-          const maxDim = 1200;
-          let width = img.width;
-          let height = img.height;
+  function closePhotoSourceSheet() {
+    document.getElementById('photoSourceSheet').style.display = 'none';
+  }
 
-          if (width > height && width > maxDim) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else if (height > maxDim) {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
+  function handleSheetBackdrop(event) {
+    if (event.target.id === 'photoSourceSheet') closePhotoSourceSheet();
+  }
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
+  function chooseCamera() {
+    closePhotoSourceSheet();
+    document.getElementById('cameraInput').click();
+  }
 
-          compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+  function chooseGallery() {
+    closePhotoSourceSheet();
+    document.getElementById('galleryInput').click();
+  }
 
-          // Web Share API 전송용 Blob 추출
-          canvas.toBlob(function(blob) {
-            imageBlob = blob;
-          }, 'image/jpeg', 0.75);
+  async function processImage(input) {
+    if (!input.files || !input.files[0]) return;
 
-          const preview = document.getElementById('preview');
-          preview.src = compressedBase64;
-          preview.style.display = 'block';
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+    const file = input.files[0];
+    closePhotoSourceSheet();
+
+    // 1) 캔버스 압축 전에 원본 File에서 EXIF GPS를 먼저 읽는다.
+    let hasExifGps = false;
+    try {
+      if (window.exifr) {
+        const gps = await exifr.gps(file);
+        if (gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)) {
+          setLocation(gps.latitude, gps.longitude, "exif", "사진 EXIF GPS에서 위치를 가져왔습니다.");
+          requiresMapSelection = false;
+          hasExifGps = true;
+        }
+      }
+    } catch (err) {
+      console.warn('EXIF GPS 읽기 실패:', err);
     }
+
+    if (!hasExifGps) {
+      locationSource = "awaiting-map";
+      requiresMapSelection = true;
+      document.getElementById('gpsStatus').innerText = "사진 GPS 정보 없음";
+      document.getElementById('locationSource').innerText = "지도에서 현장 위치를 지정해주세요.";
+      // 지도 API 로딩은 이미지 압축과 별개로 진행한다.
+      openMapPicker("사진에 GPS(EXIF) 정보가 없어 지도에서 위치를 선택해주세요.");
+    }
+
+    // 2) 이후 기존 방식대로 이미지 압축 및 미리보기 생성
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const maxDim = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+
+        canvas.toBlob(function(blob) {
+          imageBlob = blob;
+        }, 'image/jpeg', 0.75);
+
+        const preview = document.getElementById('preview');
+        preview.src = compressedBase64;
+        preview.style.display = 'block';
+      };
+
+      img.onerror = function() {
+        alert("선택한 사진을 브라우저에서 열 수 없습니다. 다른 사진 형식으로 다시 시도해주세요.");
+      };
+
+      img.src = e.target.result;
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function loadKakaoMapSdk() {
+    if (window.kakao && window.kakao.maps) return Promise.resolve();
+    if (kakaoSdkPromise) return kakaoSdkPromise;
+
+    if (!KAKAO_MAP_APP_KEY || KAKAO_MAP_APP_KEY === "YOUR_KAKAO_JAVASCRIPT_KEY") {
+      return Promise.reject(new Error("Kakao JavaScript 키가 설정되지 않았습니다."));
+    }
+
+    kakaoSdkPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.id = 'kakaoMapSdk';
+      script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(KAKAO_MAP_APP_KEY)}&autoload=false`;
+      script.onload = () => {
+        if (!window.kakao || !window.kakao.maps) {
+          reject(new Error("Kakao 지도 SDK 초기화에 실패했습니다."));
+          return;
+        }
+        kakao.maps.load(resolve);
+      };
+      script.onerror = () => reject(new Error("Kakao 지도 SDK를 불러오지 못했습니다."));
+      document.head.appendChild(script);
+    });
+
+    return kakaoSdkPromise;
+  }
+
+  async function openMapPicker(message) {
+    const modal = document.getElementById('mapModal');
+    const help = document.getElementById('mapHelp');
+    const coordText = document.getElementById('mapCoordText');
+
+    help.innerText = message || "지도에서 현장 위치를 눌러 핀을 지정해주세요.";
+    coordText.innerText = "지도를 불러오는 중...";
+    modal.style.display = 'flex';
+
+    try {
+      await loadKakaoMapSdk();
+      initOrRefreshMap();
+    } catch (err) {
+      document.getElementById('map').innerHTML = `
+        <div style="height:100%;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;color:#5f6368;line-height:1.5;">
+          ${err.message}<br>KAKAO_MAP_APP_KEY를 입력하고 Kakao Developers에 서비스 도메인을 등록해주세요.
+        </div>`;
+      coordText.innerText = "지도 API 설정이 필요합니다.";
+    }
+  }
+
+  function initOrRefreshMap() {
+    const mapContainer = document.getElementById('map');
+    mapContainer.innerHTML = '';
+
+    const fallbackLat = 37.566500;
+    const fallbackLng = 126.978000;
+    const centerLat = currentLat ? Number(currentLat) : fallbackLat;
+    const centerLng = currentLng ? Number(currentLng) : fallbackLng;
+    const center = new kakao.maps.LatLng(centerLat, centerLng);
+
+    kakaoMap = new kakao.maps.Map(mapContainer, {
+      center,
+      level: 4
+    });
+
+    kakaoMarker = new kakao.maps.Marker({
+      position: center
+    });
+
+    if (currentLat && currentLng) {
+      kakaoMarker.setMap(kakaoMap);
+      pendingMapLat = Number(currentLat);
+      pendingMapLng = Number(currentLng);
+      updateMapCoordText();
+    } else {
+      pendingMapLat = null;
+      pendingMapLng = null;
+      document.getElementById('mapCoordText').innerText = "지도에서 위치를 눌러주세요.";
+    }
+
+    kakao.maps.event.addListener(kakaoMap, 'click', function(mouseEvent) {
+      const latlng = mouseEvent.latLng;
+      pendingMapLat = latlng.getLat();
+      pendingMapLng = latlng.getLng();
+      kakaoMarker.setPosition(latlng);
+      kakaoMarker.setMap(kakaoMap);
+      updateMapCoordText();
+    });
+
+    setTimeout(() => kakaoMap.relayout(), 50);
+  }
+
+  function updateMapCoordText() {
+    if (pendingMapLat == null || pendingMapLng == null) return;
+    document.getElementById('mapCoordText').innerText =
+      `선택 위치: ${pendingMapLat.toFixed(6)}, ${pendingMapLng.toFixed(6)}`;
+  }
+
+  function moveMapToCurrentLocation() {
+    if (!navigator.geolocation) {
+      alert("이 브라우저에서는 현재 위치를 사용할 수 없습니다.");
+      return;
+    }
+
+    const coordText = document.getElementById('mapCoordText');
+    coordText.innerText = "현재 위치를 확인 중...";
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        pendingMapLat = pos.coords.latitude;
+        pendingMapLng = pos.coords.longitude;
+        updateMapCoordText();
+
+        if (kakaoMap && kakaoMarker) {
+          const latlng = new kakao.maps.LatLng(pendingMapLat, pendingMapLng);
+          kakaoMap.setCenter(latlng);
+          kakaoMarker.setPosition(latlng);
+          kakaoMarker.setMap(kakaoMap);
+        }
+      },
+      () => {
+        coordText.innerText = "현재 위치 수신에 실패했습니다. 지도를 눌러 직접 선택해주세요.";
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
+
+  function confirmMapLocation() {
+    if (pendingMapLat == null || pendingMapLng == null) {
+      alert("지도에서 위치를 먼저 선택해주세요.");
+      return;
+    }
+
+    setLocation(pendingMapLat, pendingMapLng, "map", "지도에서 직접 지정한 위치입니다.");
+    requiresMapSelection = false;
+    closeMapPicker();
+  }
+
+  function closeMapPicker() {
+    document.getElementById('mapModal').style.display = 'none';
   }
 
   // 데이터 전송 및 완료 화면 전환
@@ -263,6 +539,12 @@
     }
     if (!selectedDirection) {
       alert("방향을 선택해주세요.");
+      return;
+    }
+
+    if (requiresMapSelection) {
+      alert("사진에 GPS 정보가 없어 지도에서 위치를 지정해야 합니다.");
+      openMapPicker("사진에 GPS(EXIF) 정보가 없습니다. 등록 전에 지도에서 현장 위치를 지정해주세요.");
       return;
     }
 
@@ -297,7 +579,7 @@
         // [카카오맵 링크]
         let kakaoMapUrl = "";
         if (currentLat && currentLng) {
-          kakaoMapUrl = `https://map.kakao.com/?q=${currentLat},${currentLng}`;
+          kakaoMapUrl = `https://map.kakao.com/link/map/${currentLat},${currentLng}`;
         }
 
         lastReportText = `${road} ${selectedDirection}방향 ${detail}\n${desc}`;
@@ -366,18 +648,23 @@
     document.getElementById('description').value = '';
     document.getElementById('preview').style.display = 'none';
     document.getElementById('cameraInput').value = '';
+    document.getElementById('galleryInput').value = '';
     document.querySelectorAll('.btn-dir').forEach(b => b.classList.remove('active'));
     selectedDirection = "";
     compressedBase64 = null;
     imageBlob = null;
     lastReportText = "";
+    locationSource = "device";
+    requiresMapSelection = false;
+    pendingMapLat = null;
+    pendingMapLng = null;
 
     // 화면 전환
     document.getElementById('resultView').style.display = 'none';
     document.getElementById('inputView').style.display = 'block';
     window.scrollTo(0, 0);
 
-    getLocation(); // 위치 재수신
+    getLocation(false); // 새 입력 시작 시 현재 위치 재수신
   }
 </script>
 
