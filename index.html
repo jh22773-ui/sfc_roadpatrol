@@ -169,6 +169,7 @@
   <label>보고 내용 요약</label>
   <div class="summary-box" id="summaryText"></div>
   <img id="summaryPreview" class="summary-img" alt="등록된 사진" style="display: none;">
+  <button type="button" class="btn-sub" id="downloadPhotoBtn" onclick="downloadPhoto()" style="display: none;">💾 사진 파일로 저장</button>
 
   <!-- 신규 입력 복귀 버튼 -->
   <button type="button" class="btn-sub" onclick="resetToInput()">➕ 신규 입력 (원래 페이지로)</button>
@@ -210,6 +211,8 @@
 
   // 공유용 텍스트 캐시
   let lastReportText = "";
+  // PC 공유용 텍스트 (사진 단축 링크 포함)
+  let pcShareText = "";
 
   window.onload = function() {
     const savedName = localStorage.getItem('reporterName');
@@ -367,7 +370,6 @@
         canvas.toBlob(function(blob) {
           imageBlob = blob;
         }, 'image/jpeg', 0.75);
-
         const preview = document.getElementById('preview');
         preview.src = compressedBase64;
         preview.style.display = 'block';
@@ -583,7 +585,11 @@
         // [카카오맵 링크]
         let kakaoMapUrl = "";
         if (currentLat && currentLng) {
-          kakaoMapUrl = `https://map.kakao.com/link/map/${currentLat}%2C${currentLng}`;
+          // 형식: /link/map/핀이름,위도,경도
+          // 밴드가 쉼표에서 URL을 끊으므로 쉼표까지 전부 %2C로 인코딩한다(카카오맵은 정상 인식).
+          // 핀이름 안의 쉼표는 구분자와 헷갈리지 않도록 공백으로 바꾼다.
+          const pinName = `${road} ${selectedDirection}방향 ${detail}`.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+          kakaoMapUrl = "https://map.kakao.com/link/map/" + encodeURIComponent(`${pinName},${currentLat},${currentLng}`);
         }
 
         lastReportText = `${road} ${selectedDirection}방향 ${detail}\n${desc}`;
@@ -591,8 +597,14 @@
           lastReportText += `\n\n위치확인(카카오맵):\n${kakaoMapUrl}`;
         }
 
+        // PC는 사진 파일을 넘길 수 없으므로 서버가 돌려준 사진 링크를 글에 붙인다.
+        pcShareText = lastReportText;
+        if (result.photoUrl) {
+          pcShareText += `\n\n사진보기:\n${result.photoUrl}`;
+        }
+
         // 결과 화면 표시 세팅
-        document.getElementById('summaryText').innerText = lastReportText;
+        document.getElementById('summaryText').innerText = isMobileDevice() ? lastReportText : pcShareText;
         const sumImg = document.getElementById('summaryPreview');
         if (compressedBase64) {
           sumImg.src = compressedBase64;
@@ -600,6 +612,8 @@
         } else {
           sumImg.style.display = 'none';
         }
+        document.getElementById('downloadPhotoBtn').style.display =
+          (compressedBase64 && !result.photoUrl && !isMobileDevice()) ? 'block' : 'none';
 
         // 화면 전환: 입력 화면 숨기고 결과 화면 오픈
         document.getElementById('inputView').style.display = 'none';
@@ -617,10 +631,44 @@
     }
   }
 
-  // 시스템 네이티브 공유창 호출 (카카오톡, 밴드 등으로 전송)
+  function isMobileDevice() {
+    if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
+      return navigator.userAgentData.mobile;
+    }
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  }
+
+  // PC: 밴드 웹 공유창을 텍스트와 함께 연다.
+  // 밴드 공유 URL은 텍스트만 받으므로 사진은 글 안의 드라이브 단축 링크로 전달한다.
+  function shareToBandPC() {
+    const shareUrl = "https://band.us/plugin/share"
+      + "?body=" + encodeURIComponent(pcShareText)
+      + "&route=" + encodeURIComponent(location.origin && location.origin !== "null" ? location.origin : "https://band.us");
+
+    const popup = window.open(shareUrl, "bandShare", "width=520,height=720");
+    if (!popup) {
+      // 팝업 차단 시 현재 탭에서 연다.
+      location.href = shareUrl;
+    }
+  }
+
+  // 사진 링크를 못 받았을 때(서버 미반영 등) 사진을 직접 첨부할 수 있게 파일로 저장
+  function downloadPhoto() {
+    if (!imageBlob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(imageBlob);
+    a.download = "patrol_photo.jpg";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // 모바일: 시스템 네이티브 공유창 호출 (카카오톡, 밴드 등으로 전송)
+  // PC: 밴드 웹 공유창
   async function shareReport() {
-    if (!navigator.share) {
-      alert("이 브라우저는 시스템 공유 기능을 지원하지 않습니다. 텍스트를 복사해 사용해주세요.");
+    if (!isMobileDevice() || !navigator.share) {
+      shareToBandPC();
       return;
     }
 
@@ -657,6 +705,7 @@
     selectedDirection = "";
     compressedBase64 = null;
     imageBlob = null;
+    pcShareText = "";
     lastReportText = "";
     locationSource = "device";
     pendingMapLat = null;
