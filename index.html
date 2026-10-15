@@ -29,7 +29,12 @@
     /* 사진 선택 / 미리보기 */
     .camera-btn { display: block; width: 100%; text-align: center; background: #0f9d58; color: white; padding: 11px; border-radius: 8px; font-weight: bold; font-size: 0.95rem; cursor: pointer; border: 0; }
     #cameraInput, #galleryInput { display: none; }
-    #preview { width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px; margin-top: 8px; display: none; }
+    .camera-btn:disabled { background: #bdc1c6; cursor: default; }
+    .photo-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+    .photo-list:empty { display: none; }
+    .photo-item { position: relative; aspect-ratio: 1 / 1; }
+    .photo-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; display: block; }
+    .photo-remove { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: rgba(0,0,0,0.6); color: #fff; font-size: 0.9rem; font-weight: 700; cursor: pointer; line-height: 26px; padding: 0; }
     .location-source { margin-top: 6px; color: #5f6368; font-size: 0.76rem; }
 
     /* 사진 촬영/앨범 선택 바텀시트 */
@@ -63,7 +68,6 @@
 
     /* 완료 화면 요약 카드 */
     .summary-box { background: #f8f9fa; border: 1px solid #dadce0; border-radius: 8px; padding: 14px; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-bottom: 12px; }
-    .summary-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -93,7 +97,6 @@
       <option value="서부간선도로">서부간선도로</option>
       <option value="강남순환로">강남순환로</option>
       <option value="우면산로">우면산로</option>
-      <option value="양재대로">양재대로</option>
     </select>
   </div>
 
@@ -125,11 +128,11 @@
   </div>
 
   <div class="form-group">
-    <label>현장 사진</label>
-    <button type="button" class="camera-btn" onclick="openPhotoSourceSheet()">📷 사진 추가</button>
+    <label>현장 사진 (최대 5장)</label>
+    <button type="button" class="camera-btn" id="addPhotoBtn" onclick="openPhotoSourceSheet()">📷 사진 추가 (0/5)</button>
     <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="processImage(this)">
-    <input type="file" id="galleryInput" accept="image/*" onchange="processImage(this)">
-    <img id="preview" alt="미리보기">
+    <input type="file" id="galleryInput" accept="image/*" multiple onchange="processImage(this)">
+    <div id="photoList" class="photo-list"></div>
   </div>
 
   <button type="button" class="btn-main" id="submitBtn" onclick="submitData()">등록하기</button>
@@ -170,8 +173,8 @@
 
   <label>보고 내용 요약</label>
   <div class="summary-box" id="summaryText"></div>
-  <img id="summaryPreview" class="summary-img" alt="등록된 사진" style="display: none;">
-  <button type="button" class="btn-sub" id="downloadPhotoBtn" onclick="downloadPhoto()" style="display: none;">💾 사진 파일로 저장</button>
+  <div id="summaryPhotos" class="photo-list"></div>
+  <button type="button" class="btn-sub" id="downloadPhotoBtn" onclick="downloadPhotos()" style="display: none;">💾 사진 파일로 저장</button>
 
   <!-- 신규 입력 복귀 버튼 -->
   <button type="button" class="btn-sub" onclick="resetToInput()">➕ 신규 입력 (원래 페이지로)</button>
@@ -186,26 +189,26 @@
 
   const ROAD_DIRECTIONS = {
     "올림픽대로": ["공항", "강일"],
-    "동부간선도로": ["상계", "성수"],
+    "동부간선도로": ["의정부", "성수"],
     "동부간선도로B": ["장지", "청담"],
     "강변북로": ["난지", "구리"],
-    "내부순환도로": ["성산", "성동"],
+    "내부순환도로": ["성산", "성수"],
     "고속국도1호": ["서울", "부산"],
-    "북부간선도로": ["종암JC", "신내"],
+    "북부간선도로": ["월곡", "신내"],
     "국회대로": ["목동", "인천"],
     "언주로": ["포이", "내곡"],
     "서부간선도로": ["성산", "시흥"],
     "강남순환로": ["광명", "수서"],
-    "우면산로": ["반포", "과천"],
-    "양재대로": ["수서", "과천"]
-
+    "우면산로": ["반포", "과천"]
   };
 
   let selectedDirection = "";
   let currentLat = null;
   let currentLng = null;
-  let compressedBase64 = null;
-  let imageBlob = null; // 공유를 위한 Blob 객체
+  const MAX_PHOTOS = 5;
+  // 첨부 사진 목록: { base64: 서버 전송용, blob: 공유/저장용 }
+  let photos = [];
+  let photoProcessing = 0; // 압축 중인 사진 수
   let locationSource = "device";
 
   let kakaoSdkPromise = null;
@@ -304,6 +307,10 @@
   }
 
   function openPhotoSourceSheet() {
+    if (photos.length + photoProcessing >= MAX_PHOTOS) {
+      alert(`사진은 최대 ${MAX_PHOTOS}장까지 추가할 수 있습니다.`);
+      return;
+    }
     document.getElementById('photoSourceSheet').style.display = 'flex';
   }
 
@@ -317,7 +324,9 @@
 
   function chooseCamera() {
     closePhotoSourceSheet();
-    document.getElementById('cameraInput').click();
+    const input = document.getElementById('cameraInput');
+    input.value = '';
+    input.click();
   }
 
   function chooseGallery() {
@@ -333,61 +342,132 @@
     return /\.(jpe?g|png|heic|heif|webp)$/i.test(file.name || '');
   }
 
-  function processImage(input) {
-    if (!input.files || !input.files[0]) return;
+  async function processImage(input) {
+    if (!input.files || !input.files.length) return;
 
-    const file = input.files[0];
+    let files = Array.from(input.files);
+    input.value = '';
     closePhotoSourceSheet();
 
-    if (!isImageFile(file)) {
-      alert('사진 파일만 선택할 수 있습니다.');
-      input.value = '';
-      return;
+    if (files.some(f => !isImageFile(f))) {
+      alert('사진 파일만 선택할 수 있습니다. 사진이 아닌 파일은 제외합니다.');
+      files = files.filter(isImageFile);
     }
 
-    // 사진은 업로드/미리보기용으로만 처리한다.
-    // 위치 정보는 사진에서 읽지 않고 기기 GPS 또는 지도 수동선택만 사용한다.
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const img = new Image();
+    const remaining = MAX_PHOTOS - photos.length - photoProcessing;
+    if (files.length > remaining) {
+      alert(`사진은 최대 ${MAX_PHOTOS}장까지입니다. 앞의 ${Math.max(remaining, 0)}장만 추가합니다.`);
+      files = files.slice(0, Math.max(remaining, 0));
+    }
+    if (!files.length) return;
 
-      img.onload = function() {
-        const canvas = document.createElement('canvas');
-        const maxDim = 1200;
-        let width = img.width;
-        let height = img.height;
+    photoProcessing += files.length;
+    updatePhotoButton();
 
-        if (width > height && width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        } else if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
+    // 선택한 순서대로 추가되도록 하나씩 처리한다.
+    for (const file of files) {
+      try {
+        photos.push(await compressImage(file));
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        photoProcessing--;
+        renderPhotoList();
+      }
+    }
+  }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+  // 사진은 업로드/미리보기용으로만 처리한다.
+  // 위치 정보는 사진에서 읽지 않고 기기 GPS 또는 지도 수동선택만 사용한다.
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("사진 파일을 읽지 못했습니다."));
+      reader.onload = function(e) {
+        const img = new Image();
 
-        compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1200;
+          let width = img.width;
+          let height = img.height;
 
-        canvas.toBlob(function(blob) {
-          imageBlob = blob;
-        }, 'image/jpeg', 0.75);
-        const preview = document.getElementById('preview');
-        preview.src = compressedBase64;
-        preview.style.display = 'block';
+          if (width > height && width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const base64 = canvas.toDataURL('image/jpeg', 0.75);
+          canvas.toBlob(function(blob) {
+            if (!blob) {
+              reject(new Error("사진 변환에 실패했습니다."));
+              return;
+            }
+            resolve({ base64, blob });
+          }, 'image/jpeg', 0.75);
+        };
+
+        img.onerror = function() {
+          reject(new Error("선택한 사진을 브라우저에서 열 수 없습니다. 다른 사진 형식으로 다시 시도해주세요."));
+        };
+
+        img.src = e.target.result;
       };
 
-      img.onerror = function() {
-        alert("선택한 사진을 브라우저에서 열 수 없습니다. 다른 사진 형식으로 다시 시도해주세요.");
-      };
+      reader.readAsDataURL(file);
+    });
+  }
 
-      img.src = e.target.result;
-    };
+  function updatePhotoButton() {
+    const btn = document.getElementById('addPhotoBtn');
+    const count = photos.length + photoProcessing;
+    btn.innerText = photoProcessing > 0
+      ? `사진 처리 중... (${count}/${MAX_PHOTOS})`
+      : `📷 사진 추가 (${count}/${MAX_PHOTOS})`;
+    btn.disabled = count >= MAX_PHOTOS;
+  }
 
-    reader.readAsDataURL(file);
+  // 썸네일 목록 그리기. removable=false면 삭제 버튼 없이 보여주기만 한다.
+  function renderPhotoGrid(containerId, removable) {
+    const list = document.getElementById(containerId);
+    list.innerHTML = '';
+    photos.forEach((photo, idx) => {
+      const item = document.createElement('div');
+      item.className = 'photo-item';
+
+      const img = document.createElement('img');
+      img.src = photo.base64;
+      img.alt = `사진 ${idx + 1}`;
+      item.appendChild(img);
+
+      if (removable) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'photo-remove';
+        del.innerText = '✕';
+        del.onclick = () => removePhoto(idx);
+        item.appendChild(del);
+      }
+      list.appendChild(item);
+    });
+  }
+
+  function renderPhotoList() {
+    renderPhotoGrid('photoList', true);
+    updatePhotoButton();
+  }
+
+  function removePhoto(idx) {
+    photos.splice(idx, 1);
+    renderPhotoList();
   }
 
   function loadKakaoMapSdk() {
@@ -559,6 +639,11 @@
       return;
     }
 
+    if (photoProcessing > 0) {
+      alert("사진을 처리하는 중입니다. 잠시 후 다시 눌러주세요.");
+      return;
+    }
+
     submitBtn.disabled = true;
     loading.style.display = 'block';
 
@@ -570,7 +655,7 @@
       latitude: currentLat,
       longitude: currentLng,
       description: desc,
-      imageBase64: compressedBase64
+      images: photos.map(p => p.base64)
     };
 
     try {
@@ -603,22 +688,19 @@
         }
 
         // PC는 사진 파일을 넘길 수 없으므로 서버가 돌려준 사진 링크를 글에 붙인다.
+        // photoUrl(단일)은 이전 버전 서버 응답 호환용
+        const photoUrls = Array.isArray(result.photoUrls) ? result.photoUrls
+          : (result.photoUrl ? [result.photoUrl] : []);
         pcShareText = lastReportText;
-        if (result.photoUrl) {
-          pcShareText += `\n\n사진보기:\n${result.photoUrl}`;
+        if (photoUrls.length) {
+          pcShareText += `\n\n사진보기:\n${photoUrls.join('\n')}`;
         }
 
         // 결과 화면 표시 세팅
         document.getElementById('summaryText').innerText = isMobileDevice() ? lastReportText : pcShareText;
-        const sumImg = document.getElementById('summaryPreview');
-        if (compressedBase64) {
-          sumImg.src = compressedBase64;
-          sumImg.style.display = 'block';
-        } else {
-          sumImg.style.display = 'none';
-        }
+        renderPhotoGrid('summaryPhotos', false);
         document.getElementById('downloadPhotoBtn').style.display =
-          (compressedBase64 && !result.photoUrl && !isMobileDevice()) ? 'block' : 'none';
+          (photos.length && photoUrls.length < photos.length && !isMobileDevice()) ? 'block' : 'none';
 
         // 화면 전환: 입력 화면 숨기고 결과 화면 오픈
         document.getElementById('inputView').style.display = 'none';
@@ -658,15 +740,16 @@
   }
 
   // 사진 링크를 못 받았을 때(서버 미반영 등) 사진을 직접 첨부할 수 있게 파일로 저장
-  function downloadPhoto() {
-    if (!imageBlob) return;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(imageBlob);
-    a.download = "patrol_photo.jpg";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  function downloadPhotos() {
+    photos.forEach((photo, idx) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(photo.blob);
+      a.download = `patrol_photo_${idx + 1}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
   }
 
   // 모바일: 시스템 네이티브 공유창 호출 (카카오톡, 밴드 등으로 전송)
@@ -681,11 +764,12 @@
       text: lastReportText
     };
 
-    // 사진 파일 객체가 있으면 파일도 함께 포함
-    if (imageBlob) {
-      const file = new File([imageBlob], "patrol_photo.jpg", { type: "image/jpeg" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        shareData.files = [file];
+    // 사진이 있으면 전부 파일로 함께 포함
+    if (photos.length) {
+      const files = photos.map((p, idx) =>
+        new File([p.blob], `patrol_photo_${idx + 1}.jpg`, { type: "image/jpeg" }));
+      if (navigator.canShare && navigator.canShare({ files })) {
+        shareData.files = files;
       }
     }
 
@@ -703,13 +787,13 @@
     // 폼 초기화 (보고자와 노선명은 편의상 유지)
     document.getElementById('detailLocation').value = '';
     document.getElementById('description').value = '';
-    document.getElementById('preview').style.display = 'none';
     document.getElementById('cameraInput').value = '';
     document.getElementById('galleryInput').value = '';
     document.querySelectorAll('.btn-dir').forEach(b => b.classList.remove('active'));
     selectedDirection = "";
-    compressedBase64 = null;
-    imageBlob = null;
+    photos = [];
+    renderPhotoList();
+    document.getElementById('summaryPhotos').innerHTML = '';
     pcShareText = "";
     lastReportText = "";
     locationSource = "device";
