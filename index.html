@@ -97,6 +97,7 @@
       <option value="서부간선도로">서부간선도로</option>
       <option value="강남순환로">강남순환로</option>
       <option value="우면산로">우면산로</option>
+      <option value="양재대로">양재대로</option>
     </select>
   </div>
 
@@ -131,7 +132,8 @@
     <label>현장 사진 (최대 5장)</label>
     <button type="button" class="camera-btn" id="addPhotoBtn" onclick="openPhotoSourceSheet()">📷 사진 추가 (0/5)</button>
     <input type="file" id="cameraInput" accept="image/*" capture="environment" onchange="processImage(this)">
-    <input type="file" id="galleryInput" accept="image/*" multiple onchange="processImage(this)">
+    <!-- Windows는 HEIF 확장이 없으면 image/*에 .heic가 포함되지 않아 파일 선택창에 안 보이므로 확장자를 명시 -->
+    <input type="file" id="galleryInput" accept="image/*,.heic,.heif" multiple onchange="processImage(this)">
     <div id="photoList" class="photo-list"></div>
   </div>
 
@@ -199,7 +201,8 @@
     "언주로": ["포이", "내곡"],
     "서부간선도로": ["성산", "시흥"],
     "강남순환로": ["광명", "수서"],
-    "우면산로": ["반포", "과천"]
+    "우면산로": ["반포", "과천"],
+    "양재대로": ["수서", "과천"]
   };
 
   let selectedDirection = "";
@@ -211,6 +214,7 @@
   let photoProcessing = 0; // 압축 중인 사진 수
   let photoGpsAsked = false; // 이번 보고에서 사진 좌표 적용을 이미 물었는지
   let exifrPromise = null;
+  let heicToPromise = null;
   let locationSource = "device";
 
   let kakaoSdkPromise = null;
@@ -373,7 +377,7 @@
         if (!photoGpsAsked && !isMobileDevice()) {
           await tryUsePhotoLocation(file);
         }
-        photos.push(await compressImage(file));
+        photos.push(await loadPhoto(file));
       } catch (err) {
         alert(err.message);
       } finally {
@@ -381,6 +385,42 @@
         renderPhotoList();
       }
     }
+  }
+
+  function isHeicFile(file) {
+    return /^image\/hei[cf]/i.test(file.type || '') || /\.hei[cf]$/i.test(file.name || '');
+  }
+
+  // 브라우저가 직접 열 수 있으면 그대로 압축하고, 못 여는 HEIC(크롬/엣지 등)는 JPEG로 변환 후 압축한다.
+  // 사파리처럼 HEIC를 직접 여는 브라우저에서는 변환 라이브러리(약 3MB)를 내려받지 않는다.
+  async function loadPhoto(file) {
+    try {
+      return await compressImage(file);
+    } catch (err) {
+      if (!isHeicFile(file)) throw err;
+    }
+
+    let jpeg;
+    try {
+      jpeg = await convertHeicToJpeg(file);
+    } catch (err) {
+      console.warn("HEIC 변환 실패:", err);
+      throw new Error(`HEIC 사진을 변환하지 못했습니다. (${file.name})\nJPG로 바꿔서 다시 올려주세요.`);
+    }
+    return await compressImage(jpeg);
+  }
+
+  function loadHeicTo() {
+    if (!heicToPromise) {
+      heicToPromise = import("https://cdn.jsdelivr.net/npm/heic-to@1.6.5/dist/heic-to.js")
+        .catch(err => { heicToPromise = null; throw err; });
+    }
+    return heicToPromise;
+  }
+
+  async function convertHeicToJpeg(file) {
+    const { heicTo } = await loadHeicTo();
+    return await heicTo({ blob: file, type: "image/jpeg", quality: 0.92 });
   }
 
   // PC 전용: 사진 EXIF의 GPS 좌표를 읽어 위치로 쓸지 묻는다.
