@@ -12,13 +12,31 @@ android {
         minSdk 29
         // 35로 올리면 Android 15에서 화면이 상태바 아래까지 강제로 확장되므로 34 유지
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        // 정식 빌드는 release 워크플로가 태그(v1.2.3)에서 -PappVersionCode / -PappVersionName으로 넘긴다.
+        versionCode((project.findProperty('appVersionCode') ?: '1') as int)
+        versionName(project.findProperty('appVersionName') ?: '1.0')
+    }
+
+    // 고정 서명 키. 키 파일과 비밀번호는 GitHub Secrets에만 있고 저장소에는 없다.
+    def signingKeystore = System.getenv('SIGNING_KEYSTORE_FILE')
+    signingConfigs {
+        release {
+            if (signingKeystore) {
+                storeFile file(signingKeystore)
+                storeType 'pkcs12'
+                storePassword System.getenv('SIGNING_PASSWORD')
+                keyAlias 'sfc'
+                keyPassword System.getenv('SIGNING_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            if (signingKeystore) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
