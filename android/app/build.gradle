@@ -1,0 +1,33 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'kr.sfc.roadpatrol'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'kr.sfc.roadpatrol'
+        // loadThumbnail, setRequireOriginal 등 Android 10(API 29) 이상 API 사용
+        minSdk 29
+        // 35로 올리면 Android 15에서 화면이 상태바 아래까지 강제로 확장되므로 34 유지
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.13.1'
+}

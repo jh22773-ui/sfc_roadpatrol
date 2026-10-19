@@ -209,6 +209,8 @@
   let currentLat = null;
   let currentLng = null;
   const MAX_PHOTOS = 5;
+  // 안드로이드 앱(순찰적출입력) 안에서 열렸는지. 앱이 User-Agent에 표시를 붙인다.
+  const IS_APP = /SFCRoadPatrolApp\//.test(navigator.userAgent);
   // 첨부 사진 목록: { base64: 서버 전송용, blob: 공유/저장용 }
   let photos = [];
   let photoProcessing = 0; // 압축 중인 사진 수
@@ -374,7 +376,7 @@
     for (const file of files) {
       try {
         // 압축하면 EXIF가 사라지므로 원본 파일에서 먼저 좌표를 확인한다.
-        if (!photoGpsAsked && !isMobileDevice()) {
+        if (!photoGpsAsked && (IS_APP || !isMobileDevice())) {
           await tryUsePhotoLocation(file);
         }
         photos.push(await loadPhoto(file));
@@ -423,8 +425,8 @@
     return await heicTo({ blob: file, type: "image/jpeg", quality: 0.92 });
   }
 
-  // PC 전용: 사진 EXIF의 GPS 좌표를 읽어 위치로 쓸지 묻는다.
-  // 안드로이드는 사진 선택 시 좌표가 지워지는 경우가 많고, 현장에서는 기기 GPS가 정확하므로 제외한다.
+  // PC와 안드로이드 앱 전용: 사진 EXIF의 GPS 좌표를 읽어 위치로 쓸지 묻는다.
+  // 모바일 브라우저는 사진 선택 시 안드로이드가 좌표를 지워서 제외한다. 앱은 원본을 넘겨주므로 좌표가 남아 있다.
   // 좌표가 있는 첫 사진에서 한 번만 묻는다(평균은 서로 다른 곳에서 찍은 사진이 섞이면 엉뚱한 위치가 됨).
   function loadExifr() {
     if (window.exifr) return Promise.resolve();
@@ -839,6 +841,12 @@
   // 모바일: 시스템 네이티브 공유창 호출 (카카오톡, 밴드 등으로 전송)
   // PC: 밴드 웹 공유창
   async function shareReport() {
+    // 안드로이드 앱(WebView)에는 navigator.share가 없어서 앱이 직접 공유창을 띄운다.
+    if (IS_APP && window.SfcApp) {
+      window.SfcApp.share(lastReportText, JSON.stringify(photos.map(p => p.base64)));
+      return;
+    }
+
     if (!isMobileDevice() || !navigator.share) {
       shareToBandPC();
       return;
