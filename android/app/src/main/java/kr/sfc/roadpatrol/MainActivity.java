@@ -2,8 +2,11 @@ package kr.sfc.roadpatrol;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -52,6 +55,7 @@ public class MainActivity extends Activity {
     private static final String APP_HOST = "jh22773-ui.github.io";
     private static final String UA_MARK = "SFCRoadPatrolApp/1";
     private static final int MAX_PHOTOS = 5;
+    private static final String KAKAOTALK = "com.kakao.talk";
 
     private static final int REQ_PICK = 1;
     private static final int REQ_CAMERA = 2;
@@ -67,6 +71,9 @@ public class MainActivity extends Activity {
 
     private GeolocationPermissions.Callback geoCallback;
     private String geoOrigin;
+
+    // 사진과 함께 공유한 글. 카카오톡은 사진이 있으면 글을 버리므로 돌아왔을 때 안내에 쓴다.
+    private String pendingShareText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -135,6 +142,38 @@ public class MainActivity extends Activity {
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         webView.saveState(outState);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 공유창에서 카카오톡을 골랐다가 돌아온 경우: 사진만 갔으므로 글 붙여넣기를 안내한다.
+        String chosen = ShareChosenReceiver.lastChosenPackage;
+        if (pendingShareText != null && chosen != null) {
+            String text = pendingShareText;
+            pendingShareText = null;
+            ShareChosenReceiver.lastChosenPackage = null;
+            if (KAKAOTALK.equals(chosen)) showKakaoTextGuide(text);
+        }
+    }
+
+    private void showKakaoTextGuide(String text) {
+        new AlertDialog.Builder(this)
+                .setTitle("카카오톡은 사진만 전달됩니다")
+                .setMessage("보고 글은 복사해 두었습니다.\n카카오톡 대화방 입력창을 길게 눌러 '붙여넣기' 하세요.")
+                .setPositiveButton("글도 카톡으로 보내기", (d, w) -> {
+                    Intent i = new Intent(Intent.ACTION_SEND);
+                    i.setType("text/plain");
+                    i.putExtra(Intent.EXTRA_TEXT, text);
+                    i.setPackage(KAKAOTALK);
+                    try {
+                        startActivity(i);
+                    } catch (ActivityNotFoundException e) {
+                        toast("카카오톡을 열 수 없습니다.");
+                    }
+                })
+                .setNegativeButton("확인", null)
+                .show();
     }
 
     @Override
@@ -368,9 +407,23 @@ public class MainActivity extends Activity {
             for (int k = 1; k < uris.size(); k++) clip.addItem(new ClipData.Item(uris.get(k)));
             i.setClipData(clip);
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            // 카카오톡처럼 사진이 있으면 글을 버리는 앱에서도 붙여넣을 수 있게 글을 복사해 둔다.
+            ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+            if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("보고 내용", text));
+            pendingShareText = text;
+        } else {
+            pendingShareText = null;
         }
+
+        // 어떤 앱을 골랐는지 ShareChosenReceiver로 받는다. EXTRA_CHOSEN_COMPONENT가 채워지려면 mutable이어야 한다.
+        ShareChosenReceiver.lastChosenPackage = null;
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+        PendingIntent chosenCallback = PendingIntent.getBroadcast(
+                this, 0, new Intent(this, ShareChosenReceiver.class), flags);
         try {
-            startActivity(Intent.createChooser(i, "보고 공유"));
+            startActivity(Intent.createChooser(i, "보고 공유", chosenCallback.getIntentSender()));
         } catch (ActivityNotFoundException e) {
             toast("공유할 앱이 없습니다.");
         }

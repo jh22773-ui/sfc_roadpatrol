@@ -44,6 +44,10 @@
             android:name=".PhotoPickerActivity"
             android:exported="false" />
 
+        <receiver
+            android:name=".ShareChosenReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"
