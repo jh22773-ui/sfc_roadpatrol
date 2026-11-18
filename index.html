@@ -61,7 +61,8 @@
     /* 버튼 공통 */
     .btn-main { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; }
     .btn-main:disabled { background: #bdc1c6; }
-    .btn-share { width: 100%; background: #ea4335; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 14px; box-shadow: 0 2px 4px rgba(234,67,53,0.3); }
+    .btn-share { width: 100%; background: #ea4335; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(234,67,53,0.3); }
+    .btn-share.kakao { background: #fee500; color: #191919; box-shadow: 0 2px 4px rgba(0,0,0,0.15); margin-bottom: 14px; }
     .btn-sub { width: 100%; background: #f1f3f4; color: #3c4043; border: 1px solid #dadce0; padding: 12px; border-radius: 8px; font-size: 0.95rem; font-weight: bold; cursor: pointer; margin-top: 14px; }
     
     #loading { display: none; text-align: center; font-weight: bold; color: #d93025; margin-top: 10px; font-size: 0.9rem; }
@@ -171,7 +172,8 @@
   <h2>적출 등록 완료</h2>
 
   <!-- 상단 공유 버튼 -->
-  <button type="button" class="btn-share" onclick="shareReport()">📢 밴드 / 카카오톡 공유</button>
+  <button type="button" class="btn-share" onclick="shareReport()">📢 밴드 공유</button>
+  <button type="button" class="btn-share kakao" onclick="shareKakao()">💬 카카오톡 보내기</button>
 
   <label>보고 내용 요약</label>
   <div class="summary-box" id="summaryText"></div>
@@ -229,6 +231,8 @@
   let lastReportText = "";
   // PC 공유용 텍스트 (사진 단축 링크 포함)
   let pcShareText = "";
+  // 카카오톡 카드 / 자세히 보기 페이지용 마지막 보고
+  let lastReport = null;
 
   window.onload = function() {
     const savedName = localStorage.getItem('reporterName');
@@ -782,6 +786,16 @@
           pcShareText += `\n\n사진보기:\n${photoUrls.join('\n')}`;
         }
 
+        lastReport = {
+          title: `${road} ${selectedDirection}방향 ${detail}`.trim(),
+          desc,
+          reporter,
+          lat: currentLat,
+          lng: currentLng,
+          time: formatNow(),
+          photoUrls
+        };
+
         // 결과 화면 표시 세팅
         document.getElementById('summaryText').innerText = isMobileDevice() ? lastReportText : pcShareText;
         renderPhotoGrid('summaryPhotos', false);
@@ -838,6 +852,90 @@
     });
   }
 
+  // ---------------------------------------------------------------- 카카오톡 보내기
+  // 카카오톡은 사진과 글을 한 메시지로 받지 못하므로 카카오 공유 카드(피드)로 보낸다.
+  // 카드는 설명이 몇 줄에서 잘리므로, 카드/버튼은 보고 전체를 보여주는 view.html로 연결한다.
+  // 링크는 카카오 개발자 콘솔 [제품 링크 관리 > 웹 도메인]에 등록된 SITE_URL 도메인이어야 열린다.
+  const SITE_URL = "https://jh22773-ui.github.io/sfc_roadpatrol/";
+  const VIEW_DESC_MAX = 500; // 링크 주소가 너무 길어지지 않도록 자세히 보기에 싣는 상태설명 길이 제한
+  let kakaoSharePromise = null;
+
+  function formatNow() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  // 자세히 보기 페이지에 넘길 보고 내용을 v= 한 값으로 만든다. (UTF-8 JSON → base64url)
+  // 카카오 사용자 정의 템플릿의 링크 인자로 넣어도 &, =, 한글 등이 변형되지 않게 하기 위함. view.html이 풀어서 쓴다.
+  function encodeViewParam(report) {
+    const data = { t: report.title, at: report.time };
+    if (report.desc) data.d = report.desc.slice(0, VIEW_DESC_MAX);
+    if (report.reporter) data.r = report.reporter;
+    if (report.lat && report.lng) {
+      data.lat = Number(report.lat);
+      data.lng = Number(report.lng);
+    }
+    // 사진은 드라이브 파일 ID만 넘긴다 (https://lh3.googleusercontent.com/d/<ID>)
+    const ids = report.photoUrls.map(u => (u.split('/d/')[1] || '').split(/[/?]/)[0]).filter(Boolean);
+    if (ids.length) data.p = ids;
+
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    let bin = '';
+    bytes.forEach(b => { bin += String.fromCharCode(b); });
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function buildViewUrl(report) {
+    return SITE_URL + 'view.html?v=' + encodeViewParam(report);
+  }
+
+  function loadKakaoShareSdk() {
+    if (window.Kakao && window.Kakao.Share) return Promise.resolve();
+    if (!kakaoSharePromise) {
+      kakaoSharePromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.8.0/kakao.min.js";
+        s.crossOrigin = "anonymous";
+        s.onload = () => resolve();
+        s.onerror = () => { kakaoSharePromise = null; reject(new Error("카카오 SDK를 불러오지 못했습니다.")); };
+        document.head.appendChild(s);
+      });
+    }
+    return kakaoSharePromise;
+  }
+
+  async function shareKakao() {
+    if (!lastReport) return;
+    try {
+      await loadKakaoShareSdk();
+      if (!Kakao.isInitialized()) Kakao.init(KAKAO_MAP_APP_KEY);
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+
+    const viewUrl = buildViewUrl(lastReport);
+    const mapUrl = viewUrl.replace('view.html?', 'view.html?go=map&');
+    const link = url => ({ mobileWebUrl: url, webUrl: url });
+
+    const content = {
+      title: lastReport.title,
+      description: lastReport.desc || '(상태설명 없음)',
+      link: link(viewUrl)
+    };
+    if (lastReport.photoUrls.length) content.imageUrl = lastReport.photoUrls[0];
+
+    const buttons = [{ title: '자세히 보기', link: link(viewUrl) }];
+    if (lastReport.lat && lastReport.lng) buttons.unshift({ title: '위치 보기', link: link(mapUrl) });
+
+    try {
+      Kakao.Share.sendDefault({ objectType: 'feed', content, buttons });
+    } catch (err) {
+      alert("카카오톡 공유 실패: " + err.message);
+    }
+  }
+
   // 모바일: 시스템 네이티브 공유창 호출 (카카오톡, 밴드 등으로 전송)
   // PC: 밴드 웹 공유창
   async function shareReport() {
@@ -888,6 +986,7 @@
     renderPhotoList();
     document.getElementById('summaryPhotos').innerHTML = '';
     pcShareText = "";
+    lastReport = null;
     lastReportText = "";
     locationSource = "device";
     pendingMapLat = null;

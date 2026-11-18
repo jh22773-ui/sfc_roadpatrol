@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>도로 순찰 적출 보고</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { margin: 0; padding: 14px; background-color: #f4f6f8; color: #202124; }
+    .card { background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); max-width: 640px; margin: 0 auto; }
+    h1 { margin: 0 0 6px; font-size: 1.2rem; color: #1a73e8; line-height: 1.4; }
+    .meta { color: #5f6368; font-size: 0.85rem; margin-bottom: 14px; }
+    .desc { background: #f8f9fa; border: 1px solid #dadce0; border-radius: 8px; padding: 14px; font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin-bottom: 14px; }
+    .btn-map { display: block; text-align: center; background: #1a73e8; color: #fff; padding: 13px; border-radius: 8px; font-weight: bold; text-decoration: none; margin-bottom: 14px; }
+    .photos img { width: 100%; border-radius: 8px; margin-bottom: 10px; display: block; background: #eef1f4; }
+    .empty { color: #5f6368; text-align: center; padding: 30px 0; }
+  </style>
+</head>
+<body>
+<div class="card" id="report"></div>
+
+<script>
+  // 카카오톡 카드에서 열리는 "자세히 보기" 페이지.
+  // 보고 내용은 v= 한 값(UTF-8 JSON의 base64url, index.html의 encodeViewParam)으로 받는다.
+  //   t: 제목, d: 상태설명, r: 보고자, at: 등록 시각, lat/lng: 좌표, p: 드라이브 사진 ID 배열
+  // go=map 이면 바로 카카오맵으로 넘어간다. (카카오 카드 버튼은 등록된 도메인만 열 수 있어 여기를 거친다)
+  const params = new URLSearchParams(location.search);
+  const data = decodeViewParam(params.get('v'));
+  const title = typeof data.t === 'string' ? data.t : '';
+  const lat = Number(data.lat);
+  const lng = Number(data.lng);
+  const hasLocation = data.lat != null && data.lng != null && isFinite(lat) && isFinite(lng);
+
+  function decodeViewParam(v) {
+    if (!v) return {};
+    try {
+      const b64 = v.replace(/-/g, '+').replace(/_/g, '/');
+      const bin = atob(b64 + '='.repeat((4 - b64.length % 4) % 4));
+      const bytes = Uint8Array.from(bin, ch => ch.charCodeAt(0));
+      const obj = JSON.parse(new TextDecoder().decode(bytes));
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function text(v) {
+    return typeof v === 'string' ? v : '';
+  }
+
+  function kakaoMapUrl() {
+    // 형식: /link/map/핀이름,위도,경도 (쉼표까지 인코딩해야 밴드 등에서 링크가 끊기지 않음)
+    const pinName = (title || '순찰 적출 위치').replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+    return "https://map.kakao.com/link/map/" + encodeURIComponent(`${pinName},${lat.toFixed(6)},${lng.toFixed(6)}`);
+  }
+
+  if (params.get('go') === 'map' && hasLocation) {
+    location.replace(kakaoMapUrl());
+  } else {
+    render();
+  }
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function render() {
+    const root = document.getElementById('report');
+    if (!title) {
+      root.appendChild(el('div', 'empty', '보고 내용을 찾을 수 없습니다.'));
+      return;
+    }
+    document.title = title + ' - 순찰 적출 보고';
+
+    root.appendChild(el('h1', null, title));
+    const meta = [text(data.at), text(data.r) && `보고자 ${data.r}`].filter(Boolean).join(' · ');
+    if (meta) root.appendChild(el('div', 'meta', meta));
+
+    root.appendChild(el('div', 'desc', text(data.d) || '(상태설명 없음)'));
+
+    if (hasLocation) {
+      const a = el('a', 'btn-map', '📍 카카오맵에서 위치 보기');
+      a.href = kakaoMapUrl();
+      root.appendChild(a);
+    }
+
+    const ids = (Array.isArray(data.p) ? data.p : []).filter(id => typeof id === 'string' && /^[\w-]+$/.test(id));
+    if (ids.length) {
+      const box = el('div', 'photos');
+      ids.forEach((id, i) => {
+        const img = el('img');
+        img.src = 'https://lh3.googleusercontent.com/d/' + id;
+        img.alt = `현장 사진 ${i + 1}`;
+        img.loading = 'lazy';
+        box.appendChild(img);
+      });
+      root.appendChild(box);
+    }
+  }
+</script>
+</body>
+</html>
