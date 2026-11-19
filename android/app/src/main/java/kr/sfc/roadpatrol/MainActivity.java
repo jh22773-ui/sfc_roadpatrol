@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
     private static final String UA_MARK = "SFCRoadPatrolApp/1";
     private static final int MAX_PHOTOS = 5;
     private static final String KAKAOTALK = "com.kakao.talk";
+    private static final String BAND = "com.nhn.android.band";
 
     private static final int REQ_PICK = 1;
     private static final int REQ_CAMERA = 2;
@@ -357,12 +358,20 @@ public class MainActivity extends Activity {
     // ---------------------------------------------------------------- 공유 (웹에서 호출)
 
     private class AppBridge {
+        /** 공유창을 띄운다. (1.0.1 이하와 같은 동작. 웹은 shareTo가 없는 구버전 앱에서 이걸 쓴다) */
+        @JavascriptInterface
+        public void share(String text, String imagesJson) {
+            shareTo("", text, imagesJson);
+        }
+
         /**
+         * @param target     "band"면 공유창 없이 밴드 앱을 바로 연다. 그 밖의 값은 공유창.
          * @param text       공유할 글
          * @param imagesJson data URL(base64 JPEG) 문자열 배열의 JSON
          */
         @JavascriptInterface
-        public void share(String text, String imagesJson) {
+        public void shareTo(String target, String text, String imagesJson) {
+            final String targetPackage = "band".equals(target) ? BAND : null;
             ArrayList<Uri> uris = new ArrayList<>();
             try {
                 JSONArray arr = new JSONArray(imagesJson == null ? "[]" : imagesJson);
@@ -383,11 +392,12 @@ public class MainActivity extends Activity {
                 uris.clear(); // 사진 변환에 실패하면 글만 공유한다.
             }
             final String body = text == null ? "" : text;
-            runOnUiThread(() -> startShare(body, uris));
+            runOnUiThread(() -> startShare(body, uris, targetPackage));
         }
     }
 
-    private void startShare(String text, ArrayList<Uri> uris) {
+    /** targetPackage가 있으면 그 앱을 바로 열고, 없거나 설치돼 있지 않으면 공유창을 띄운다. */
+    private void startShare(String text, ArrayList<Uri> uris, String targetPackage) {
         Intent i;
         if (uris.isEmpty()) {
             i = new Intent(Intent.ACTION_SEND);
@@ -407,7 +417,19 @@ public class MainActivity extends Activity {
             for (int k = 1; k < uris.size(); k++) clip.addItem(new ClipData.Item(uris.get(k)));
             i.setClipData(clip);
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        }
 
+        if (targetPackage != null) {
+            try {
+                startActivity(new Intent(i).setPackage(targetPackage));
+                pendingShareText = null;
+                return;
+            } catch (ActivityNotFoundException e) {
+                toast("밴드 앱이 없어 공유할 앱을 선택합니다.");
+            }
+        }
+
+        if (!uris.isEmpty()) {
             // 카카오톡처럼 사진이 있으면 글을 버리는 앱에서도 붙여넣을 수 있게 글을 복사해 둔다.
             ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
             if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("보고 내용", text));

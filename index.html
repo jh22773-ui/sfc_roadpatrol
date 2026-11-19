@@ -61,8 +61,10 @@
     /* 버튼 공통 */
     .btn-main { width: 100%; background: #1a73e8; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; }
     .btn-main:disabled { background: #bdc1c6; }
-    .btn-share { width: 100%; background: #ea4335; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(234,67,53,0.3); }
-    .btn-share.kakao { background: #fee500; color: #191919; box-shadow: 0 2px 4px rgba(0,0,0,0.15); margin-bottom: 14px; }
+    .share-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .btn-share { flex: 1; min-width: 0; border: none; padding: 14px 8px; border-radius: 8px; font-size: 1.05rem; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.15); white-space: nowrap; }
+    .btn-share.band { background: #00c73c; color: #fff; }
+    .btn-share.kakao { background: #fee500; color: #191919; }
     .btn-sub { width: 100%; background: #f1f3f4; color: #3c4043; border: 1px solid #dadce0; padding: 12px; border-radius: 8px; font-size: 0.95rem; font-weight: bold; cursor: pointer; margin-top: 14px; }
     
     #loading { display: none; text-align: center; font-weight: bold; color: #d93025; margin-top: 10px; font-size: 0.9rem; }
@@ -172,8 +174,10 @@
   <h2>적출 등록 완료</h2>
 
   <!-- 상단 공유 버튼 -->
-  <button type="button" class="btn-share" onclick="shareReport()">📢 밴드 공유</button>
-  <button type="button" class="btn-share kakao" onclick="shareKakao()">💬 카카오톡 보내기</button>
+  <div class="share-row">
+    <button type="button" class="btn-share band" onclick="shareReport()">밴드 공유</button>
+    <button type="button" class="btn-share kakao" onclick="shareKakao()">카카오톡 공유</button>
+  </div>
 
   <label>보고 내용 요약</label>
   <div class="summary-box" id="summaryText"></div>
@@ -939,9 +943,15 @@
   // 모바일: 시스템 네이티브 공유창 호출 (카카오톡, 밴드 등으로 전송)
   // PC: 밴드 웹 공유창
   async function shareReport() {
-    // 안드로이드 앱(WebView)에는 navigator.share가 없어서 앱이 직접 공유창을 띄운다.
+    // 안드로이드 앱(WebView)에는 navigator.share가 없어서 앱이 직접 공유한다.
+    // 1.0.2 이상은 shareTo('band')로 공유창 없이 밴드를 바로 열고, 구버전 앱은 공유창(share)을 띄운다.
     if (IS_APP && window.SfcApp) {
-      window.SfcApp.share(lastReportText, JSON.stringify(photos.map(p => p.base64)));
+      const images = JSON.stringify(photos.map(p => p.base64));
+      if (typeof window.SfcApp.shareTo === 'function') {
+        window.SfcApp.shareTo('band', lastReportText, images);
+      } else {
+        window.SfcApp.share(lastReportText, images);
+      }
       return;
     }
 
